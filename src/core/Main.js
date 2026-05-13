@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Master Integration (World & Environment Update)
+// Game: Palworld Mobile - Master Integration (Resources & Water Update)
 import { PalMobileEngine } from './PalMobileEngine.js';
 import { CharacterController } from './CharacterController.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
@@ -15,6 +15,8 @@ import { HealthBar } from '../ui/HealthBar.js';
 import { MonsterEffects } from '../entities/MonsterEffects.js';
 import { Terrain } from '../world/Terrain.js';
 import { EnvironmentSpawner } from '../world/EnvironmentSpawner.js';
+import { WaterSystem } from '../world/WaterSystem.js';
+import { HarvestSystem } from '../systems/HarvestSystem.js';
 
 class PalworldMobile {
     constructor() {
@@ -26,13 +28,15 @@ class PalworldMobile {
         this.spawner = null;
         this.terrain = null;
         this.envSpawner = null;
+        this.waterSystem = null;
         this.isInitialized = false;
     }
 
     start() {
-        // 1. Setup 3D Environment & World
+        // 1. Setup 3D Environment, Terrain & Water
         this.world = new GameRenderer();
         this.terrain = new Terrain(this.world.scene);
+        this.waterSystem = new WaterSystem(this.world.scene);
         this.envSpawner = new EnvironmentSpawner(this.world.scene);
         this.playerMesh = new PlayerModel(this.world.scene);
         this.spawner = new MonsterSpawner(this.world.scene);
@@ -42,19 +46,21 @@ class PalworldMobile {
         this.initCombatInterface();
         this.initCatchingInput();
 
-        // 3. Initial World Population (Pals & Nature)
+        // 3. Populate World (Lakes, Pals, Nature)
+        this.waterSystem.createLake(30, 30, 20); // Lake at 30, 30
+        this.waterSystem.createLake(-40, -50, 15); // Second Lake
         this.populateWorld();
 
         this.isInitialized = true;
         this.gameLoop();
-        console.log("%c [SYSTEM] 4KM World Generated with Biomes", "color: #ff0000; font-weight: bold;");
+        console.log("%c [SYSTEM] 4KM Map with Lakes & Resources Live", "color: #ff0000; font-weight: bold;");
     }
 
     populateWorld() {
         // Spawn Monsters
         for(let i=0; i < 20; i++) {
-            const rx = (Math.random() - 0.5) * 150;
-            const rz = (Math.random() - 0.5) * 150;
+            const rx = (Math.random() - 0.5) * 160;
+            const rz = (Math.random() - 0.5) * 160;
             const pal = this.spawner.spawnRandom(rx, rz, "HILLS");
             if(pal) {
                 pal.stats = { hp: 100 };
@@ -62,12 +68,18 @@ class PalworldMobile {
             }
         }
 
-        // Spawn Trees & Rocks
-        for(let i=0; i < 50; i++) {
-            const rx = (Math.random() - 0.5) * 200;
-            const rz = (Math.random() - 0.5) * 200;
-            if(Math.random() > 0.4) this.envSpawner.spawnTree(rx, rz);
-            else this.envSpawner.spawnRock(rx, rz);
+        // Spawn Trees & Rocks (Stored for Harvesting)
+        this.activeResources = []; 
+        for(let i=0; i < 60; i++) {
+            const rx = (Math.random() - 0.5) * 250;
+            const rz = (Math.random() - 0.5) * 250;
+            let type = Math.random() > 0.4 ? 'TREE' : 'ROCK';
+            let mesh;
+            
+            if(type === 'TREE') mesh = this.envSpawner.spawnTree(rx, rz);
+            else mesh = this.envSpawner.spawnRock(rx, rz);
+            
+            this.activeResources.push({ type, position: {x: rx, z: rz}, mesh });
         }
     }
 
@@ -79,11 +91,12 @@ class PalworldMobile {
 
         document.getElementById('atk-btn')?.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            this.handlePlayerAttack();
+            this.handlePlayerAction();
         });
     }
 
-    handlePlayerAttack() {
+    handlePlayerAction() {
+        // 1. Check for Combat (Pals)
         this.spawner.activeMonsters.forEach((pal) => {
             const inRange = CombatSystem.isTargetInRange(this.playerMesh.group.position, pal.mesh.position, 6);
             if (inRange && pal.stats?.hp > 0) {
@@ -92,6 +105,9 @@ class PalworldMobile {
                 if (status === "KILLED") MonsterEffects.playDeathEffect(this.world.scene, pal.mesh);
             }
         });
+
+        // 2. Check for Harvesting (Trees/Rocks)
+        HarvestSystem.checkHarvest(this.playerMesh.group.position, this.activeResources);
     }
 
     initCatchingInput() {
