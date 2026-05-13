@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Master Integration (Inventory & Crafting Update)
+// Game: Palworld Mobile - Master Integration (The Architect Update)
 import { PalMobileEngine } from './PalMobileEngine.js';
 import { CharacterController } from './CharacterController.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
@@ -22,6 +22,9 @@ import { SurvivalSystem } from '../systems/SurvivalSystem.js';
 import { SurvivalUI } from '../ui/SurvivalUI.js';
 import { InventoryMenu } from '../ui/InventoryMenu.js';
 import { CraftingSystem } from '../systems/CraftingSystem.js';
+import { BuildingManager } from '../world/BuildingManager.js';
+import { BuildControls } from '../ui/BuildControls.js';
+import * as THREE from 'https://cdn.skypack.dev/three@0.132.2';
 
 class PalworldMobile {
     constructor() {
@@ -31,81 +34,89 @@ class PalworldMobile {
         this.world = null;
         this.playerMesh = null;
         this.spawner = null;
-        this.terrain = null;
-        this.envSpawner = null;
-        this.waterSystem = null;
+        this.builder = null;
         this.isInitialized = false;
     }
 
     start() {
-        // 1. Setup 3D Environment & World
+        // 1. Setup 3D World & Systems
         this.world = new GameRenderer();
         this.terrain = new Terrain(this.world.scene);
         this.waterSystem = new WaterSystem(this.world.scene);
         this.envSpawner = new EnvironmentSpawner(this.world.scene);
         this.playerMesh = new PlayerModel(this.world.scene);
         this.spawner = new MonsterSpawner(this.world.scene);
+        this.builder = new BuildingManager(this.world.scene);
         
-        // 2. Setup Controls, UI & Menus
+        // 2. Setup All Interfaces
         Joystick.init();
         this.initCombatInterface();
         this.initCatchingInput();
         this.initSurvivalHUD();
         this.initInventoryInterface();
 
-        // 3. Populate World
+        // 3. World Generation
         this.waterSystem.createLake(30, 30, 20);
-        this.waterSystem.createLake(-40, -50, 15);
         this.populateWorld();
 
         this.isInitialized = true;
         this.gameLoop();
         
-        window.GameInstance = this; // Global access for UI buttons
-        console.log("%c [SYSTEM] Inventory & Crafting Engine Online", "color: #ff0000; font-weight: bold;");
+        window.GameInstance = this; 
+        console.log("%c [SYSTEM] Building Engine & 4KM World Live", "color: #ff0000; font-weight: bold;");
     }
 
+    // --- BUILDING METHODS ---
+    startBuilding(type) {
+        if (InventoryMenu.isOpen) this.toggleMenu();
+        this.builder.showPreview(type, this.playerMesh.group.position);
+        
+        const buildHUD = document.getElementById('build-container') || document.createElement('div');
+        buildHUD.id = 'build-container';
+        buildHUD.innerHTML = BuildControls.render();
+        document.body.appendChild(buildHUD);
+    }
+
+    confirmBuild() {
+        this.builder.placeStructure();
+        document.getElementById('build-container')?.remove();
+    }
+
+    cancelBuild() {
+        this.builder.cancelBuilding();
+        document.getElementById('build-container')?.remove();
+    }
+
+    // --- UI & INVENTORY METHODS ---
     initInventoryInterface() {
-        // Create Menu Button (Backpack)
         const btn = document.createElement('button');
         btn.innerHTML = "🎒";
-        btn.style = "position: absolute; bottom: 150px; right: 25px; width: 65px; height: 65px; border-radius: 50%; background: rgba(0,0,0,0.7); border: 2px solid #ff0000; color: white; font-size: 28px; z-index: 100; box-shadow: 0 0 15px rgba(255,0,0,0.5);";
+        btn.style = "position: absolute; bottom: 150px; right: 25px; width: 65px; height: 65px; border-radius: 50%; background: rgba(0,0,0,0.8); border: 2px solid #ff0000; color: white; font-size: 28px; z-index: 100;";
         btn.onclick = () => this.toggleMenu();
         document.body.appendChild(btn);
 
-        // Create Menu Overlay
         const overlay = document.createElement('div');
         overlay.id = 'inventory-overlay';
         overlay.style = "position: fixed; top:0; left:0; width:100vw; height:100vh; display:none; z-index: 1000;";
         document.body.appendChild(overlay);
     }
 
-    toggleMenu() {
-        InventoryMenu.toggle(this.inventory);
-    }
+    toggleMenu() { InventoryMenu.toggle(this.inventory); }
 
     handleCraft(recipeId) {
         const result = CraftingSystem.craft(recipeId, this.inventory);
-        if(result.success) {
-            this.toggleMenu(); // Refresh UI by toggling
-            this.toggleMenu();
-        }
+        if(result.success) { this.toggleMenu(); this.toggleMenu(); }
     }
 
+    // --- LOGIC & LOOPS ---
     populateWorld() {
         this.activeResources = []; 
         for(let i=0; i < 20; i++) {
-            const rx = (Math.random() - 0.5) * 160;
-            const rz = (Math.random() - 0.5) * 160;
-            const pal = this.spawner.spawnRandom(rx, rz, "HILLS");
-            if(pal) {
-                pal.stats = { hp: 100 };
-                pal.hpBar = HealthBar.create(100);
-            }
+            const pal = this.spawner.spawnRandom((Math.random()-0.5)*150, (Math.random()-0.5)*150, "HILLS");
+            if(pal) { pal.stats = { hp: 100 }; pal.hpBar = HealthBar.create(100); }
         }
         for(let i=0; i < 60; i++) {
-            const rx = (Math.random() - 0.5) * 250;
-            const rz = (Math.random() - 0.5) * 250;
+            const rx = (Math.random()-0.5)*250, rz = (Math.random()-0.5)*250;
             let type = Math.random() > 0.4 ? 'TREE' : 'ROCK';
             let mesh = type === 'TREE' ? this.envSpawner.spawnTree(rx, rz) : this.envSpawner.spawnRock(rx, rz);
             this.activeResources.push({ type, position: {x: rx, z: rz}, mesh });
@@ -113,10 +124,10 @@ class PalworldMobile {
     }
 
     initCombatInterface() {
-        const combatContainer = document.createElement('div');
-        combatContainer.id = 'combat-ui';
-        document.body.appendChild(combatContainer);
-        combatContainer.innerHTML = CombatUI.renderCombatButtons();
+        const container = document.createElement('div');
+        container.id = 'combat-ui';
+        document.body.appendChild(container);
+        container.innerHTML = CombatUI.renderCombatButtons();
         document.getElementById('atk-btn')?.addEventListener('touchstart', (e) => {
             e.preventDefault();
             this.handlePlayerAction();
@@ -124,9 +135,9 @@ class PalworldMobile {
     }
 
     initSurvivalHUD() {
-        const hudContainer = document.createElement('div');
-        hudContainer.id = 'survival-hud';
-        document.body.appendChild(hudContainer);
+        const hud = document.createElement('div');
+        hud.id = 'survival-hud';
+        document.body.appendChild(hud);
     }
 
     handlePlayerAction() {
@@ -157,6 +168,7 @@ class PalworldMobile {
         const hud = document.getElementById('survival-hud');
         if (hud) hud.innerHTML = SurvivalUI.renderHUD(SurvivalSystem.stats);
 
+        // Player Move & Cam
         if (Joystick.moveData.x !== 0 || Joystick.moveData.y !== 0) {
             this.playerMesh.updatePosition(Joystick.moveData);
             this.world.camera.position.x = this.playerMesh.group.position.x;
@@ -164,14 +176,24 @@ class PalworldMobile {
             this.world.camera.lookAt(this.playerMesh.group.position);
         }
 
+        // --- Building Mode Preview Update ---
+        if (this.builder.isBuildingMode) {
+            const offset = new THREE.Vector3(0, 0, -6).applyQuaternion(this.playerMesh.group.quaternion);
+            this.builder.updatePreview({
+                x: this.playerMesh.group.position.x + offset.x,
+                z: this.playerMesh.group.position.z + offset.z
+            });
+        }
+
+        // Monsters AI & HP
         this.spawner.activeMonsters.forEach(pal => {
             if (pal.stats?.hp > 0) {
                 PalAI.update(pal);
-                const vector = pal.mesh.position.clone();
-                vector.project(this.world.camera);
-                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
-                const y = -(vector.y * 0.5 - 0.5) * window.innerHeight;
-                HealthBar.update(pal.hpBar, pal.stats.hp, { x, y });
+                const vector = pal.mesh.position.clone().project(this.world.camera);
+                HealthBar.update(pal.hpBar, pal.stats.hp, {
+                    x: (vector.x * 0.5 + 0.5) * window.innerWidth,
+                    y: -(vector.y * 0.5 - 0.5) * window.innerHeight
+                });
             }
         });
 
