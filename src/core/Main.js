@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Master Integration (The Architect Update)
+// Game: Palworld Mobile - Master Integration (Automation & Work AI Update)
 import { PalMobileEngine } from './PalMobileEngine.js';
 import { CharacterController } from './CharacterController.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
@@ -24,6 +24,7 @@ import { InventoryMenu } from '../ui/InventoryMenu.js';
 import { CraftingSystem } from '../systems/CraftingSystem.js';
 import { BuildingManager } from '../world/BuildingManager.js';
 import { BuildControls } from '../ui/BuildControls.js';
+import { PalWorkSystem } from '../entities/PalAI_Work.js'; // Naya Import
 import * as THREE from 'https://cdn.skypack.dev/three@0.132.2';
 
 class PalworldMobile {
@@ -35,6 +36,7 @@ class PalworldMobile {
         this.playerMesh = null;
         this.spawner = null;
         this.builder = null;
+        this.baseWorkers = []; // Base par kaam karne wale Pals ka track
         this.isInitialized = false;
     }
 
@@ -63,10 +65,10 @@ class PalworldMobile {
         this.gameLoop();
         
         window.GameInstance = this; 
-        console.log("%c [SYSTEM] Building Engine & 4KM World Live", "color: #ff0000; font-weight: bold;");
+        console.log("%c [SYSTEM] Base Automation & AI Systems Active", "color: #ff0000; font-weight: bold;");
     }
 
-    // --- BUILDING METHODS ---
+    // --- BUILDING & AUTOMATION ---
     startBuilding(type) {
         if (InventoryMenu.isOpen) this.toggleMenu();
         this.builder.showPreview(type, this.playerMesh.group.position);
@@ -78,8 +80,25 @@ class PalworldMobile {
     }
 
     confirmBuild() {
+        const structurePos = this.builder.previewMesh.position.clone();
         this.builder.placeStructure();
+        
+        // Automation: Agar player ke paas caught Pals hain, toh ek ko assign karo
+        this.assignWorkerToBase(structurePos);
+        
         document.getElementById('build-container')?.remove();
+    }
+
+    assignWorkerToBase(position) {
+        // Sirf un Pals ko use karo jo active nahi hain aur "caught" hain
+        const workerPal = this.spawner.activeMonsters.find(p => p.stats.hp > 0 && !p.isWorking);
+        if (workerPal) {
+            workerPal.isWorking = true;
+            workerPal.basePos = position;
+            workerPal.workSuitability = ["HANDIWORK", "MINING"]; // Demo Suitability
+            this.baseWorkers.push(workerPal);
+            console.log(`%c [AUTO] ${workerPal.name} assigned to Base!`, "color: #00ffff");
+        }
     }
 
     cancelBuild() {
@@ -87,7 +106,7 @@ class PalworldMobile {
         document.getElementById('build-container')?.remove();
     }
 
-    // --- UI & INVENTORY METHODS ---
+    // --- UI & INVENTORY ---
     initInventoryInterface() {
         const btn = document.createElement('button');
         btn.innerHTML = "🎒";
@@ -113,7 +132,7 @@ class PalworldMobile {
         this.activeResources = []; 
         for(let i=0; i < 20; i++) {
             const pal = this.spawner.spawnRandom((Math.random()-0.5)*150, (Math.random()-0.5)*150, "HILLS");
-            if(pal) { pal.stats = { hp: 100 }; pal.hpBar = HealthBar.create(100); }
+            if(pal) { pal.stats = { hp: 100 }; pal.hpBar = HealthBar.create(100); pal.name = "Pal #"+i; }
         }
         for(let i=0; i < 60; i++) {
             const rx = (Math.random()-0.5)*250, rz = (Math.random()-0.5)*250;
@@ -176,7 +195,7 @@ class PalworldMobile {
             this.world.camera.lookAt(this.playerMesh.group.position);
         }
 
-        // --- Building Mode Preview Update ---
+        // Building Preview Update
         if (this.builder.isBuildingMode) {
             const offset = new THREE.Vector3(0, 0, -6).applyQuaternion(this.playerMesh.group.quaternion);
             this.builder.updatePreview({
@@ -185,10 +204,16 @@ class PalworldMobile {
             });
         }
 
-        // Monsters AI & HP
+        // Update All Monsters (Wandering or Working)
         this.spawner.activeMonsters.forEach(pal => {
             if (pal.stats?.hp > 0) {
-                PalAI.update(pal);
+                if (pal.isWorking) {
+                    PalWorkSystem.updateWorkerAI(pal); // Base par kaam karega
+                } else {
+                    PalAI.update(pal); // Random ghumega
+                }
+
+                // Update Floating Bars
                 const vector = pal.mesh.position.clone().project(this.world.camera);
                 HealthBar.update(pal.hpBar, pal.stats.hp, {
                     x: (vector.x * 0.5 + 0.5) * window.innerWidth,
