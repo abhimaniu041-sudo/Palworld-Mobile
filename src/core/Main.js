@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Master Integration (Automation & Work AI Update)
+// Game: Palworld Mobile - Master Integration (Fix & Visibility Update)
 import { PalMobileEngine } from './PalMobileEngine.js';
 import { CharacterController } from './CharacterController.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
@@ -24,7 +24,7 @@ import { InventoryMenu } from '../ui/InventoryMenu.js';
 import { CraftingSystem } from '../systems/CraftingSystem.js';
 import { BuildingManager } from '../world/BuildingManager.js';
 import { BuildControls } from '../ui/BuildControls.js';
-import { PalWorkSystem } from '../entities/PalAI_Work.js'; // Naya Import
+import { PalWorkSystem } from '../entities/PalAI_Work.js';
 import * as THREE from 'https://cdn.skypack.dev/three@0.132.2';
 
 class PalworldMobile {
@@ -36,12 +36,12 @@ class PalworldMobile {
         this.playerMesh = null;
         this.spawner = null;
         this.builder = null;
-        this.baseWorkers = []; // Base par kaam karne wale Pals ka track
+        this.baseWorkers = [];
         this.isInitialized = false;
     }
 
     start() {
-        // 1. Setup 3D World & Systems
+        // 1. Setup 3D Scene First
         this.world = new GameRenderer();
         this.terrain = new Terrain(this.world.scene);
         this.waterSystem = new WaterSystem(this.world.scene);
@@ -50,14 +50,14 @@ class PalworldMobile {
         this.spawner = new MonsterSpawner(this.world.scene);
         this.builder = new BuildingManager(this.world.scene);
         
-        // 2. Setup All Interfaces
+        // 2. Interface Setup
         Joystick.init();
         this.initCombatInterface();
         this.initCatchingInput();
         this.initSurvivalHUD();
         this.initInventoryInterface();
 
-        // 3. World Generation
+        // 3. World Population
         this.waterSystem.createLake(30, 30, 20);
         this.populateWorld();
 
@@ -65,7 +65,7 @@ class PalworldMobile {
         this.gameLoop();
         
         window.GameInstance = this; 
-        console.log("%c [SYSTEM] Base Automation & AI Systems Active", "color: #ff0000; font-weight: bold;");
+        console.log("%c [SYSTEM] Engine Ready & Rendering Started", "color: #00ff00; font-weight: bold;");
     }
 
     // --- BUILDING & AUTOMATION ---
@@ -73,7 +73,7 @@ class PalworldMobile {
         if (InventoryMenu.isOpen) this.toggleMenu();
         this.builder.showPreview(type, this.playerMesh.group.position);
         
-        const buildHUD = document.getElementById('build-container') || document.createElement('div');
+        let buildHUD = document.getElementById('build-container') || document.createElement('div');
         buildHUD.id = 'build-container';
         buildHUD.innerHTML = BuildControls.render();
         document.body.appendChild(buildHUD);
@@ -82,22 +82,17 @@ class PalworldMobile {
     confirmBuild() {
         const structurePos = this.builder.previewMesh.position.clone();
         this.builder.placeStructure();
-        
-        // Automation: Agar player ke paas caught Pals hain, toh ek ko assign karo
         this.assignWorkerToBase(structurePos);
-        
         document.getElementById('build-container')?.remove();
     }
 
     assignWorkerToBase(position) {
-        // Sirf un Pals ko use karo jo active nahi hain aur "caught" hain
         const workerPal = this.spawner.activeMonsters.find(p => p.stats.hp > 0 && !p.isWorking);
         if (workerPal) {
             workerPal.isWorking = true;
             workerPal.basePos = position;
-            workerPal.workSuitability = ["HANDIWORK", "MINING"]; // Demo Suitability
             this.baseWorkers.push(workerPal);
-            console.log(`%c [AUTO] ${workerPal.name} assigned to Base!`, "color: #00ffff");
+            console.log(`%c [AUTO] Worker Assigned`, "color: #00ffff");
         }
     }
 
@@ -106,7 +101,7 @@ class PalworldMobile {
         document.getElementById('build-container')?.remove();
     }
 
-    // --- UI & INVENTORY ---
+    // --- UI METHODS ---
     initInventoryInterface() {
         const btn = document.createElement('button');
         btn.innerHTML = "🎒";
@@ -122,20 +117,60 @@ class PalworldMobile {
 
     toggleMenu() { InventoryMenu.toggle(this.inventory); }
 
-    handleCraft(recipeId) {
-        const result = CraftingSystem.craft(recipeId, this.inventory);
-        if(result.success) { this.toggleMenu(); this.toggleMenu(); }
+    // --- MAIN LOOP ---
+    gameLoop() {
+        if (!this.isInitialized) return;
+
+        // 1. Systems Update
+        SurvivalSystem.update();
+        const hud = document.getElementById('survival-hud');
+        if (hud) hud.innerHTML = SurvivalUI.renderHUD(SurvivalSystem.stats);
+
+        // 2. Player Control
+        if (Joystick.moveData.x !== 0 || Joystick.moveData.y !== 0) {
+            this.playerMesh.updatePosition(Joystick.moveData);
+            this.world.camera.position.x = this.playerMesh.group.position.x;
+            this.world.camera.position.z = this.playerMesh.group.position.z + 12;
+            this.world.camera.lookAt(this.playerMesh.group.position);
+        }
+
+        // 3. Building Preview
+        if (this.builder.isBuildingMode) {
+            const offset = new THREE.Vector3(0, 0, -6).applyQuaternion(this.playerMesh.group.quaternion);
+            this.builder.updatePreview({
+                x: this.playerMesh.group.position.x + offset.x,
+                z: this.playerMesh.group.position.z + offset.z
+            });
+        }
+
+        // 4. Monsters & Workers AI
+        this.spawner.activeMonsters.forEach(pal => {
+            if (pal.stats?.hp > 0) {
+                if (pal.isWorking) PalWorkSystem.updateWorkerAI(pal);
+                else PalAI.update(pal);
+
+                // Update Health Bar Position
+                const vector = pal.mesh.position.clone().project(this.world.camera);
+                HealthBar.update(pal.hpBar, pal.stats.hp, {
+                    x: (vector.x * 0.5 + 0.5) * window.innerWidth,
+                    y: -(vector.y * 0.5 - 0.5) * window.innerHeight
+                });
+            }
+        });
+
+        // 5. CRITICAL: Render the scene
+        this.world.render(this.world.scene, this.world.camera);
+        requestAnimationFrame(() => this.gameLoop());
     }
 
-    // --- LOGIC & LOOPS ---
     populateWorld() {
         this.activeResources = []; 
-        for(let i=0; i < 20; i++) {
-            const pal = this.spawner.spawnRandom((Math.random()-0.5)*150, (Math.random()-0.5)*150, "HILLS");
-            if(pal) { pal.stats = { hp: 100 }; pal.hpBar = HealthBar.create(100); pal.name = "Pal #"+i; }
+        for(let i=0; i < 15; i++) {
+            const pal = this.spawner.spawnRandom((Math.random()-0.5)*100, (Math.random()-0.5)*100, "HILLS");
+            if(pal) { pal.stats = { hp: 100 }; pal.hpBar = HealthBar.create(100); }
         }
-        for(let i=0; i < 60; i++) {
-            const rx = (Math.random()-0.5)*250, rz = (Math.random()-0.5)*250;
+        for(let i=0; i < 40; i++) {
+            const rx = (Math.random()-0.5)*200, rz = (Math.random()-0.5)*200;
             let type = Math.random() > 0.4 ? 'TREE' : 'ROCK';
             let mesh = type === 'TREE' ? this.envSpawner.spawnTree(rx, rz) : this.envSpawner.spawnRock(rx, rz);
             this.activeResources.push({ type, position: {x: rx, z: rz}, mesh });
@@ -147,10 +182,6 @@ class PalworldMobile {
         container.id = 'combat-ui';
         document.body.appendChild(container);
         container.innerHTML = CombatUI.renderCombatButtons();
-        document.getElementById('atk-btn')?.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            this.handlePlayerAction();
-        });
     }
 
     initSurvivalHUD() {
@@ -159,71 +190,13 @@ class PalworldMobile {
         document.body.appendChild(hud);
     }
 
-    handlePlayerAction() {
-        this.spawner.activeMonsters.forEach((pal) => {
-            const inRange = CombatSystem.isTargetInRange(this.playerMesh.group.position, pal.mesh.position, 6);
-            if (inRange && pal.stats?.hp > 0) {
-                const status = CombatSystem.applyDamage(pal, 25);
-                MonsterEffects.playHitEffect(pal.mesh);
-                if (status === "KILLED") MonsterEffects.playDeathEffect(this.world.scene, pal.mesh);
-            }
-        });
-        HarvestSystem.checkHarvest(this.playerMesh.group.position, this.activeResources);
-    }
-
     initCatchingInput() {
         window.addEventListener('touchstart', (e) => {
             if (e.touches.length > 2) { 
                 const result = CatchingSystem.throwSphere('COMMON', 50);
-                console.log("Catch: " + result);
+                console.log("Catch Attempt: " + result);
             }
         });
-    }
-
-    gameLoop() {
-        if (!this.isInitialized) return;
-
-        SurvivalSystem.update();
-        const hud = document.getElementById('survival-hud');
-        if (hud) hud.innerHTML = SurvivalUI.renderHUD(SurvivalSystem.stats);
-
-        // Player Move & Cam
-        if (Joystick.moveData.x !== 0 || Joystick.moveData.y !== 0) {
-            this.playerMesh.updatePosition(Joystick.moveData);
-            this.world.camera.position.x = this.playerMesh.group.position.x;
-            this.world.camera.position.z = this.playerMesh.group.position.z + 12;
-            this.world.camera.lookAt(this.playerMesh.group.position);
-        }
-
-        // Building Preview Update
-        if (this.builder.isBuildingMode) {
-            const offset = new THREE.Vector3(0, 0, -6).applyQuaternion(this.playerMesh.group.quaternion);
-            this.builder.updatePreview({
-                x: this.playerMesh.group.position.x + offset.x,
-                z: this.playerMesh.group.position.z + offset.z
-            });
-        }
-
-        // Update All Monsters (Wandering or Working)
-        this.spawner.activeMonsters.forEach(pal => {
-            if (pal.stats?.hp > 0) {
-                if (pal.isWorking) {
-                    PalWorkSystem.updateWorkerAI(pal); // Base par kaam karega
-                } else {
-                    PalAI.update(pal); // Random ghumega
-                }
-
-                // Update Floating Bars
-                const vector = pal.mesh.position.clone().project(this.world.camera);
-                HealthBar.update(pal.hpBar, pal.stats.hp, {
-                    x: (vector.x * 0.5 + 0.5) * window.innerWidth,
-                    y: -(vector.y * 0.5 - 0.5) * window.innerHeight
-                });
-            }
-        });
-
-        this.world.renderer.render(this.world.scene, this.world.camera);
-        requestAnimationFrame(() => this.gameLoop());
     }
 }
 
