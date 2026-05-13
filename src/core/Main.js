@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Master Integration (Combat & UI Update)
+// Game: Palworld Mobile - Master Integration (Visuals & Health Update)
 import { PalMobileEngine } from './PalMobileEngine.js';
 import { CharacterController } from './CharacterController.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
@@ -11,6 +11,8 @@ import { MonsterSpawner } from '../entities/MonsterSpawner.js';
 import { CatchingSystem } from '../systems/CatchingSystem.js';
 import { CombatUI } from '../ui/CombatUI.js';
 import { CombatSystem } from '../systems/CombatSystem.js';
+import { HealthBar } from '../ui/HealthBar.js';
+import { MonsterEffects } from '../entities/MonsterEffects.js';
 
 class PalworldMobile {
     constructor() {
@@ -24,26 +26,30 @@ class PalworldMobile {
     }
 
     start() {
-        // 1. Setup 3D Environment
         this.world = new GameRenderer();
         this.playerMesh = new PlayerModel(this.world.scene);
         this.spawner = new MonsterSpawner(this.world.scene);
         
-        // 2. Setup Controls & Combat UI
         Joystick.init();
         this.initCombatInterface();
         this.initCatchingInput();
 
-        // 3. Initial Spawn
+        // Initial Spawn with Health Bars
         for(let i=0; i < 15; i++) {
-            const rx = (Math.random() - 0.5) * 60;
-            const rz = (Math.random() - 0.5) * 60;
+            const rx = (Math.random() - 0.5) * 80;
+            const rz = (Math.random() - 0.5) * 80;
             this.spawner.spawnRandom(rx, rz, "HILLS");
         }
 
+        // Assign Health Bars to all spawned monsters
+        this.spawner.activeMonsters.forEach(pal => {
+            pal.stats = { hp: 100 }; // Ensure stats exist
+            pal.hpBar = HealthBar.create(100);
+        });
+
         this.isInitialized = true;
         this.gameLoop();
-        console.log("%c [SYSTEM] Combat Engine & World Ready", "color: #ff0000; font-weight: bold;");
+        console.log("%c [SYSTEM] Visual Effects & Health Bars Active", "color: #ff0000; font-weight: bold;");
     }
 
     initCombatInterface() {
@@ -52,7 +58,6 @@ class PalworldMobile {
         document.body.appendChild(combatContainer);
         combatContainer.innerHTML = CombatUI.renderCombatButtons();
 
-        // Attack Event Listener
         document.getElementById('atk-btn')?.addEventListener('touchstart', (e) => {
             e.preventDefault();
             this.handlePlayerAttack();
@@ -60,28 +65,25 @@ class PalworldMobile {
     }
 
     handlePlayerAttack() {
-        console.log("Attacking nearest Pal...");
-        this.spawner.activeMonsters.forEach(pal => {
-            const inRange = CombatSystem.isTargetInRange(
-                this.playerMesh.group.position, 
-                pal.mesh.position, 
-                5 // Attack Range
-            );
+        this.spawner.activeMonsters.forEach((pal, index) => {
+            const inRange = CombatSystem.isTargetInRange(this.playerMesh.group.position, pal.mesh.position, 6);
             
-            if (inRange) {
-                CombatSystem.applyDamage(pal, 20); // Deal 20 DMG
-                // Visual feedback: Shrink monster slightly on hit
-                pal.mesh.scale.set(0.8, 0.8, 0.8);
-                setTimeout(() => pal.mesh.scale.set(1, 1, 1), 100);
+            if (inRange && pal.stats.hp > 0) {
+                const status = CombatSystem.applyDamage(pal, 25);
+                MonsterEffects.playHitEffect(pal.mesh);
+                
+                if (status === "KILLED") {
+                    MonsterEffects.playDeathEffect(this.world.scene, pal.mesh);
+                }
             }
         });
     }
 
     initCatchingInput() {
         window.addEventListener('touchstart', (e) => {
-            if (e.touches.length > 1) { 
+            if (e.touches.length > 2) { // 3 fingers to catch
                 const result = CatchingSystem.throwSphere('COMMON', 50);
-                console.log("Catch Result: " + result);
+                console.log("Catching: " + result);
             }
         });
     }
@@ -97,7 +99,17 @@ class PalworldMobile {
             this.world.camera.lookAt(this.playerMesh.group.position);
         }
 
-        // Render Frame
+        // Update Floating Health Bars
+        this.spawner.activeMonsters.forEach(pal => {
+            if (pal.stats.hp > 0) {
+                const vector = pal.mesh.position.clone();
+                vector.project(this.world.camera);
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = -(vector.y * 0.5 - 0.5) * window.innerHeight;
+                HealthBar.update(pal.hpBar, pal.stats.hp, { x, y });
+            }
+        });
+
         this.world.renderer.render(this.world.scene, this.world.camera);
         requestAnimationFrame(() => this.gameLoop());
     }
