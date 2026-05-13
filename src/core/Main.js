@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Master Integration (Resources & Water Update)
+// Game: Palworld Mobile - Master Integration (AI & Survival Update)
 import { PalMobileEngine } from './PalMobileEngine.js';
 import { CharacterController } from './CharacterController.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
@@ -17,6 +17,8 @@ import { Terrain } from '../world/Terrain.js';
 import { EnvironmentSpawner } from '../world/EnvironmentSpawner.js';
 import { WaterSystem } from '../world/WaterSystem.js';
 import { HarvestSystem } from '../systems/HarvestSystem.js';
+import { PalAI } from '../entities/PalAI_Advanced.js';
+import { SurvivalSystem } from '../systems/SurvivalSystem.js';
 
 class PalworldMobile {
     constructor() {
@@ -33,7 +35,7 @@ class PalworldMobile {
     }
 
     start() {
-        // 1. Setup 3D Environment, Terrain & Water
+        // 1. Setup 3D Environment & World
         this.world = new GameRenderer();
         this.terrain = new Terrain(this.world.scene);
         this.waterSystem = new WaterSystem(this.world.scene);
@@ -47,17 +49,19 @@ class PalworldMobile {
         this.initCatchingInput();
 
         // 3. Populate World (Lakes, Pals, Nature)
-        this.waterSystem.createLake(30, 30, 20); // Lake at 30, 30
-        this.waterSystem.createLake(-40, -50, 15); // Second Lake
+        this.waterSystem.createLake(30, 30, 20);
+        this.waterSystem.createLake(-40, -50, 15);
         this.populateWorld();
 
         this.isInitialized = true;
         this.gameLoop();
-        console.log("%c [SYSTEM] 4KM Map with Lakes & Resources Live", "color: #ff0000; font-weight: bold;");
+        console.log("%c [SYSTEM] Advanced AI & Survival Systems Online", "color: #ff0000; font-weight: bold;");
     }
 
     populateWorld() {
-        // Spawn Monsters
+        this.activeResources = []; 
+        
+        // Spawn Monsters with Stats
         for(let i=0; i < 20; i++) {
             const rx = (Math.random() - 0.5) * 160;
             const rz = (Math.random() - 0.5) * 160;
@@ -68,17 +72,12 @@ class PalworldMobile {
             }
         }
 
-        // Spawn Trees & Rocks (Stored for Harvesting)
-        this.activeResources = []; 
+        // Spawn Environmental Objects
         for(let i=0; i < 60; i++) {
             const rx = (Math.random() - 0.5) * 250;
             const rz = (Math.random() - 0.5) * 250;
             let type = Math.random() > 0.4 ? 'TREE' : 'ROCK';
-            let mesh;
-            
-            if(type === 'TREE') mesh = this.envSpawner.spawnTree(rx, rz);
-            else mesh = this.envSpawner.spawnRock(rx, rz);
-            
+            let mesh = type === 'TREE' ? this.envSpawner.spawnTree(rx, rz) : this.envSpawner.spawnRock(rx, rz);
             this.activeResources.push({ type, position: {x: rx, z: rz}, mesh });
         }
     }
@@ -96,7 +95,6 @@ class PalworldMobile {
     }
 
     handlePlayerAction() {
-        // 1. Check for Combat (Pals)
         this.spawner.activeMonsters.forEach((pal) => {
             const inRange = CombatSystem.isTargetInRange(this.playerMesh.group.position, pal.mesh.position, 6);
             if (inRange && pal.stats?.hp > 0) {
@@ -105,8 +103,6 @@ class PalworldMobile {
                 if (status === "KILLED") MonsterEffects.playDeathEffect(this.world.scene, pal.mesh);
             }
         });
-
-        // 2. Check for Harvesting (Trees/Rocks)
         HarvestSystem.checkHarvest(this.playerMesh.group.position, this.activeResources);
     }
 
@@ -114,7 +110,7 @@ class PalworldMobile {
         window.addEventListener('touchstart', (e) => {
             if (e.touches.length > 2) { 
                 const result = CatchingSystem.throwSphere('COMMON', 50);
-                console.log("Catching Attempt: " + result);
+                console.log("Catch Attempt: " + result);
             }
         });
     }
@@ -122,7 +118,10 @@ class PalworldMobile {
     gameLoop() {
         if (!this.isInitialized) return;
 
-        // Movement & Follow Cam
+        // 1. Update Survival Stats (Hunger/Stamina)
+        SurvivalSystem.update();
+
+        // 2. Player Movement
         if (Joystick.moveData.x !== 0 || Joystick.moveData.y !== 0) {
             this.playerMesh.updatePosition(Joystick.moveData);
             this.world.camera.position.x = this.playerMesh.group.position.x;
@@ -130,9 +129,13 @@ class PalworldMobile {
             this.world.camera.lookAt(this.playerMesh.group.position);
         }
 
-        // Update Floating Health Bars
+        // 3. Update Monsters (AI Wandering & UI)
         this.spawner.activeMonsters.forEach(pal => {
             if (pal.stats?.hp > 0) {
+                // AI Logic
+                PalAI.update(pal);
+
+                // UI Floating Bars
                 const vector = pal.mesh.position.clone();
                 vector.project(this.world.camera);
                 const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
