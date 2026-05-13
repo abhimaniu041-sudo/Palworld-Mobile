@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Master Integration (AI & Survival Update)
+// Game: Palworld Mobile - Master Integration (Survival HUD Update)
 import { PalMobileEngine } from './PalMobileEngine.js';
 import { CharacterController } from './CharacterController.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
@@ -19,6 +19,7 @@ import { WaterSystem } from '../world/WaterSystem.js';
 import { HarvestSystem } from '../systems/HarvestSystem.js';
 import { PalAI } from '../entities/PalAI_Advanced.js';
 import { SurvivalSystem } from '../systems/SurvivalSystem.js';
+import { SurvivalUI } from '../ui/SurvivalUI.js';
 
 class PalworldMobile {
     constructor() {
@@ -47,6 +48,7 @@ class PalworldMobile {
         Joystick.init();
         this.initCombatInterface();
         this.initCatchingInput();
+        this.initSurvivalHUD();
 
         // 3. Populate World (Lakes, Pals, Nature)
         this.waterSystem.createLake(30, 30, 20);
@@ -55,13 +57,19 @@ class PalworldMobile {
 
         this.isInitialized = true;
         this.gameLoop();
-        console.log("%c [SYSTEM] Advanced AI & Survival Systems Online", "color: #ff0000; font-weight: bold;");
+        console.log("%c [SYSTEM] Visual HUD & Survival Systems Online", "color: #ff0000; font-weight: bold;");
+    }
+
+    initSurvivalHUD() {
+        const hudContainer = document.createElement('div');
+        hudContainer.id = 'survival-hud';
+        document.body.appendChild(hudContainer);
     }
 
     populateWorld() {
         this.activeResources = []; 
         
-        // Spawn Monsters with Stats
+        // Spawn Monsters
         for(let i=0; i < 20; i++) {
             const rx = (Math.random() - 0.5) * 160;
             const rz = (Math.random() - 0.5) * 160;
@@ -118,8 +126,10 @@ class PalworldMobile {
     gameLoop() {
         if (!this.isInitialized) return;
 
-        // 1. Update Survival Stats (Hunger/Stamina)
+        // 1. Update Survival Logic & UI
         SurvivalSystem.update();
+        const hud = document.getElementById('survival-hud');
+        if (hud) hud.innerHTML = SurvivalUI.renderHUD(SurvivalSystem.stats);
 
         // 2. Player Movement
         if (Joystick.moveData.x !== 0 || Joystick.moveData.y !== 0) {
@@ -129,13 +139,10 @@ class PalworldMobile {
             this.world.camera.lookAt(this.playerMesh.group.position);
         }
 
-        // 3. Update Monsters (AI Wandering & UI)
+        // 3. Update Monsters (AI & Floating HP Bars)
         this.spawner.activeMonsters.forEach(pal => {
             if (pal.stats?.hp > 0) {
-                // AI Logic
                 PalAI.update(pal);
-
-                // UI Floating Bars
                 const vector = pal.mesh.position.clone();
                 vector.project(this.world.camera);
                 const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
