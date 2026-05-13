@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Master Integration (Movement Update)
+// Game: Palworld Mobile - Master Integration (Spawning & Catching Update)
 import { PalMobileEngine } from './PalMobileEngine.js';
 import { CharacterController } from './CharacterController.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
@@ -7,6 +7,8 @@ import { DashboardUI } from '../ui/Dashboard.js';
 import { GameRenderer } from './Renderer.js';
 import { Joystick } from '../ui/Joystick.js';
 import { PlayerModel } from '../entities/PlayerModel.js';
+import { MonsterSpawner } from '../entities/MonsterSpawner.js';
+import { CatchingSystem } from '../systems/CatchingSystem.js';
 
 class PalworldMobile {
     constructor() {
@@ -15,54 +17,62 @@ class PalworldMobile {
         this.inventory = new InventorySystem(500);
         this.world = null;
         this.playerMesh = null;
+        this.spawner = null;
         this.isInitialized = false;
     }
 
     start() {
-        // 1. Initialize 3D World & Character
+        // 1. Setup 3D Environment
         this.world = new GameRenderer();
         this.playerMesh = new PlayerModel(this.world.scene);
+        this.spawner = new MonsterSpawner(this.world.scene);
         
-        // 2. Initialize Virtual Joystick
+        // 2. Setup Controls
         Joystick.init();
+        this.initCatchingInput();
 
-        // 3. Load Save Data
-        const savedData = SaveManager.loadGame();
-        if (savedData) {
-            console.log("%c [SAVE] Data Restored", "color: #00ff00");
+        // 3. Initial Spawn (4km Map testing)
+        for(let i=0; i < 15; i++) {
+            const rx = (Math.random() - 0.5) * 50;
+            const rz = (Math.random() - 0.5) * 50;
+            this.spawner.spawnRandom(rx, rz, "HILLS");
         }
 
         this.isInitialized = true;
         this.gameLoop();
-        
-        console.log("%c [SYSTEM] 3D World & Controls Ready", "color: #ff0000; font-weight: bold;");
+        console.log("%c [SYSTEM] World Populated with Pals", "color: #ff0000; font-weight: bold;");
+    }
+
+    initCatchingInput() {
+        // Double tap on screen to throw Pal Sphere
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 1) { 
+                const result = CatchingSystem.throwSphere('COMMON', 50); // Testing with 50% HP
+                alert("Sphere Thrown! Result: " + result);
+            }
+        });
     }
 
     gameLoop() {
         if (!this.isInitialized) return;
 
-        // --- MOVEMENT LOGIC ---
-        // Joystick data ko player mesh ki position mein convert karna
+        // Player Movement & Camera Follow
         if (Joystick.moveData.x !== 0 || Joystick.moveData.y !== 0) {
             this.playerMesh.updatePosition(Joystick.moveData);
-            
-            // Camera smoothly follow the player
             this.world.camera.position.x = this.playerMesh.group.position.x;
             this.world.camera.position.z = this.playerMesh.group.position.z + 10;
             this.world.camera.lookAt(this.playerMesh.group.position);
         }
 
-        // --- ENVIRONMENT & UI ---
+        // UI Update
         this.engine.updateEnvironment();
         const uiContainer = document.getElementById('game-ui');
         if (uiContainer) {
             uiContainer.innerHTML = DashboardUI.renderMainDashboard(this.playerLogic.stats);
         }
 
-        // Render the 3D scene
+        // Render Frame
         this.world.renderer.render(this.world.scene, this.world.camera);
-
-        // High-performance loop for 3D movement
         requestAnimationFrame(() => this.gameLoop());
     }
 }
