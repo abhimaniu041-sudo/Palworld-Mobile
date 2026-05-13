@@ -5,39 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Palworld Mobile - Premium Edition</title>
     <style>
-        body {
-            margin: 0;
-            background: #000;
-            overflow: hidden;
-            color: #fff;
-            font-family: 'Orbitron', sans-serif;
-        }
-        #game-canvas {
-            width: 100vw;
-            height: 100vh;
-            background: radial-gradient(circle, #1a0000 0%, #000 100%);
-        }
-        #game-ui {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-        }
+        body { margin: 0; background: #000; overflow: hidden; color: #fff; font-family: 'Orbitron', sans-serif; }
+        #game-canvas { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         button { pointer-events: auto; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div id="game-canvas">
-        </div>
-    
-    <div id="game-ui">
-        </div>
+    <div id="game-canvas"></div>
+    <div id="game-ui"></div>
 
     <script type="module">
         import { GameInstance } from './src/core/Main.js';
+        
         window.addEventListener('load', () => {
+            console.log("Game Loading...");
             GameInstance.start();
         });
     </script>
