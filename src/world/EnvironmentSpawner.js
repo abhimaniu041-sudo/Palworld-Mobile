@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Amazon Rainforest Environment
+// Game: Palworld Mobile - Biome Master (Amazon & Snow Hills)
 import * as THREE from 'https://cdn.skypack.dev/three@0.132.2';
 
 export class EnvironmentSpawner {
@@ -6,86 +6,107 @@ export class EnvironmentSpawner {
         this.scene = scene;
     }
 
-    // 1. Amazon Giant (Kapok style) - Sabse unche aur ghane trees
+    // --- AMAZON JUNGLE ASSETS ---
     createAmazonGiant(x, z) {
         const group = new THREE.Group();
-
-        // Thick Dark Trunk
         const trunkGeo = new THREE.CylinderGeometry(0.8, 1.2, 12, 8);
         const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3b2201 });
         const trunk = new THREE.Mesh(trunkGeo, trunkMat);
         trunk.position.y = 6;
         group.add(trunk);
 
-        // Huge Layered Canopy (Top chhatri jaisa hissa)
-        const leafMat = new THREE.MeshStandardMaterial({ color: 0x0a3d00 }); // Deep Jungle Green
+        const leafMat = new THREE.MeshStandardMaterial({ color: 0x0a3d00 });
         for(let i = 0; i < 6; i++) {
             const canopyGeo = new THREE.SphereGeometry(3.5, 8, 8);
             const canopy = new THREE.Mesh(canopyGeo, leafMat);
-            // Randomly placing spheres at the top to create a massive crown
-            canopy.position.set(
-                (Math.random() - 0.5) * 5, 
-                11 + (Math.random() * 2), 
-                (Math.random() - 0.5) * 5
-            );
-            canopy.scale.y = 0.6; // Flattened look for Amazon canopy
+            canopy.position.set((Math.random()-0.5)*5, 11 + (Math.random()*2), (Math.random()-0.5)*5);
+            canopy.scale.y = 0.6;
             group.add(canopy);
         }
+        group.position.set(x, 0, z);
+        this.scene.add(group);
+    }
+
+    // --- SNOW BIOME ASSETS ---
+    createSnowHill(x, z) {
+        const group = new THREE.Group();
+        const height = 20 + Math.random() * 30;
+        const radius = 25 + Math.random() * 20;
+        
+        // 1. Snow Patch (Zameen ko white karne ke liye)
+        const patchGeo = new THREE.CircleGeometry(radius * 2, 12);
+        const patchMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const patch = new THREE.Mesh(patchGeo, patchMat);
+        patch.rotation.x = -Math.PI / 2;
+        patch.position.y = 0.1; // Green floor ke just upar
+        group.add(patch);
+
+        // 2. Main Hill
+        const hillGeo = new THREE.ConeGeometry(radius, height, 8);
+        const hillMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+        const hill = new THREE.Mesh(hillGeo, hillMat);
+        hill.position.y = height / 2;
+        group.add(hill);
+
+        // 3. Ice Peak (Shinier top)
+        const peakGeo = new THREE.ConeGeometry(radius * 0.4, height * 0.4, 8);
+        const peakMat = new THREE.MeshStandardMaterial({ color: 0xe0ffff, emissive: 0x112222 });
+        const peak = new THREE.Mesh(peakGeo, peakMat);
+        peak.position.set(0, height * 0.8, 0);
+        group.add(peak);
 
         group.position.set(x, 0, z);
         this.scene.add(group);
     }
 
-    // 2. Tropical Palm Tree (Nariyal jaisa tree)
-    createPalmTree(x, z) {
+    createSnowTree(x, z) {
         const group = new THREE.Group();
-
-        // Slender Curved Trunk
-        const trunkGeo = new THREE.CylinderGeometry(0.2, 0.4, 7, 8);
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6e4b1f });
+        // Frozen Trunk
+        const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 6, 6);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
         const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-        trunk.position.y = 3.5;
-        trunk.rotation.z = (Math.random() - 0.5) * 0.2; // Slight lean
+        trunk.position.y = 3;
         group.add(trunk);
 
-        // Long Palm Leaves
-        const leafMat = new THREE.MeshStandardMaterial({ color: 0x228b22, side: THREE.DoubleSide });
-        for(let i = 0; i < 10; i++) {
-            const leafGeo = new THREE.BoxGeometry(0.6, 0.05, 3.5);
-            const leaf = new THREE.Mesh(leafGeo, leafMat);
-            leaf.position.y = 7;
-            leaf.rotation.y = (i * Math.PI) / 5;
-            leaf.rotation.x = 0.6; // Downward curve
-            group.add(leaf);
+        // Snow Layers
+        const snowMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        for(let i=0; i<4; i++) {
+            const snowGeo = new THREE.ConeGeometry(2 - i*0.4, 1.5, 8);
+            const snow = new THREE.Mesh(snowGeo, snowMat);
+            snow.position.y = 4 + (i * 1.2);
+            group.add(snow);
         }
-
         group.position.set(x, 0, z);
         this.scene.add(group);
     }
 
-    // 3. Dense Undergrowth (Jungle Bush)
-    spawnBush(x, z) {
-        const bushGeo = new THREE.DodecahedronGeometry(1.5, 0);
-        const bushMat = new THREE.MeshStandardMaterial({ color: 0x145200 });
-        const bush = new THREE.Mesh(bushGeo, bushMat);
-        bush.position.set(x, 0.5, z);
-        bush.scale.set(1.5, 0.7, 1.5);
-        this.scene.add(bush);
-    }
-
-    // Main Method: Pura jungle ek saath spawn karne ke liye
-    spawnAmazonJungle(density = 80) {
+    // --- MASTER SPAWNER ---
+    // Ise Main.js se call karein: this.env.spawnAllBiomes(250);
+    spawnAllBiomes(density = 250) {
         for(let i = 0; i < density; i++) {
-            const rx = (Math.random() - 0.5) * 250;
-            const rz = (Math.random() - 0.5) * 250;
-            
-            const type = Math.random();
-            if(type > 0.7) {
-                this.createAmazonGiant(rx, rz);
-            } else if(type > 0.3) {
-                this.createPalmTree(rx, rz);
+            const rx = (Math.random() - 0.5) * 600; // Large 4km map scale
+            const rz = (Math.random() - 0.5) * 600;
+
+            if (rz < -60) { 
+                // NORTH SIDE: SNOW BIOME
+                if (Math.random() > 0.6) {
+                    this.createSnowHill(rx, rz);
+                } else {
+                    this.createSnowTree(rx, rz);
+                }
             } else {
-                this.spawnBush(rx, rz);
+                // SOUTH SIDE: AMAZON JUNGLE
+                const rand = Math.random();
+                if(rand > 0.7) {
+                    this.createAmazonGiant(rx, rz);
+                } else if(rand > 0.4) {
+                    // Tropical Palm logic (if needed) or Bush
+                    const bushGeo = new THREE.IcosahedronGeometry(2, 0);
+                    const bushMat = new THREE.MeshStandardMaterial({ color: 0x0a3d00 });
+                    const bush = new THREE.Mesh(bushGeo, bushMat);
+                    bush.position.set(rx, 1, rz);
+                    this.scene.add(bush);
+                }
             }
         }
     }
