@@ -1,111 +1,168 @@
-// Game: Palworld Mobile - Biome System (Amazon + Snow Hills)
+// Game: Palworld Mobile - Biome Integration (Amazon & Snow)
+import { GameRenderer } from './Renderer.js';
+import { Joystick } from '../ui/Joystick.js';
+import { PlayerModel } from '../entities/PlayerModel.js';
+import { MonsterSpawner } from '../entities/MonsterSpawner.js';
+import { Terrain } from '../world/Terrain.js';
+import { WaterSystem } from '../world/WaterSystem.js';
+import { EnvironmentSpawner } from '../world/EnvironmentSpawner.js';
+import { SurvivalSystem } from '../systems/SurvivalSystem.js';
+import { SurvivalUI } from '../ui/SurvivalUI.js';
+import { CombatUI } from '../ui/CombatUI.js';
 import * as THREE from 'https://cdn.skypack.dev/three@0.132.2';
 
-export class EnvironmentSpawner {
-    constructor(scene) {
-        this.scene = scene;
+class PalworldMobile {
+    constructor() {
+        this.world = null;
+        this.playerMesh = null;
+        this.spawner = null;
+        this.env = null;
+        this.isInitialized = false;
+
+        // Camera Rotation Logic
+        this.cameraAngle = 0; 
+        this.touchX = 0;
+        this.isSwiping = false;
     }
 
-    // --- AMAZON JUNGLE BIOME ---
-    createAmazonGiant(x, z) {
-        const group = new THREE.Group();
-        const trunkGeo = new THREE.CylinderGeometry(0.8, 1.2, 12, 8);
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3b2201 });
-        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-        trunk.position.y = 6;
-        group.add(trunk);
-
-        const leafMat = new THREE.MeshStandardMaterial({ color: 0x0a3d00 });
-        for(let i = 0; i < 6; i++) {
-            const canopyGeo = new THREE.SphereGeometry(3.5, 8, 8);
-            const canopy = new THREE.Mesh(canopyGeo, leafMat);
-            canopy.position.set((Math.random()-0.5)*5, 11 + (Math.random()*2), (Math.random()-0.5)*5);
-            canopy.scale.y = 0.6;
-            group.add(canopy);
-        }
-        group.position.set(x, 0, z);
-        this.scene.add(group);
-    }
-
-    createPalmTree(x, z) {
-        const group = new THREE.Group();
-        const trunkGeo = new THREE.CylinderGeometry(0.2, 0.4, 7, 8);
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6e4b1f });
-        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-        trunk.position.y = 3.5;
-        trunk.rotation.z = (Math.random()-0.5)*0.2;
-        group.add(trunk);
-
-        const leafMat = new THREE.MeshStandardMaterial({ color: 0x228b22, side: THREE.DoubleSide });
-        for(let i = 0; i < 10; i++) {
-            const leafGeo = new THREE.BoxGeometry(0.6, 0.05, 3.5);
-            const leaf = new THREE.Mesh(leafGeo, leafMat);
-            leaf.position.y = 7;
-            leaf.rotation.y = (i * Math.PI) / 5;
-            leaf.rotation.x = 0.6;
-            group.add(leaf);
-        }
-        group.position.set(x, 0, z);
-        this.scene.add(group);
-    }
-
-    // --- SNOW BIOME (North Area) ---
-    createSnowHill(x, z) {
-        const height = 15 + Math.random() * 25;
-        const radius = 20 + Math.random() * 15;
+    async start() {
+        console.log("%c [BOOT] Multi-Biome Engine Start...", "color: #00ffff; font-weight: bold;");
         
-        // Hill Base (White)
-        const hillGeo = new THREE.ConeGeometry(radius, height, 8);
-        const hillMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-        const hill = new THREE.Mesh(hillGeo, hillMat);
-        hill.position.set(x, height / 2, z);
-        this.scene.add(hill);
+        try {
+            // 1. Core Scene Setup
+            this.world = new GameRenderer();
+            const scene = this.world.scene;
 
-        // Ice Peak (Shinier top)
-        const peakGeo = new THREE.ConeGeometry(radius * 0.3, height * 0.3, 8);
-        const peakMat = new THREE.MeshStandardMaterial({ color: 0xd0f0ff, emissive: 0x001122 });
-        const peak = new THREE.Mesh(peakGeo, peakMat);
-        peak.position.set(x, height * 0.85, z);
-        this.scene.add(peak);
-    }
+            // 2. Load World Assets
+            this.terrain = new Terrain(scene);
+            this.water = new WaterSystem(scene);
+            this.env = new EnvironmentSpawner(scene);
+            this.playerMesh = new PlayerModel(scene);
+            this.spawner = new MonsterSpawner(scene);
 
-    createSnowTree(x, z) {
-        const group = new THREE.Group();
-        // Frozen Trunk
-        const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 6, 6);
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-        trunk.position.y = 3;
-        group.add(trunk);
+            // 3. UI & Controls
+            this.initHUD();
+            Joystick.init(); 
+            this.initCameraControls();
 
-        // Snow Blocks on branches
-        const snowMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
-        for(let i=0; i<4; i++) {
-            const snowGeo = new THREE.BoxGeometry(1.5 - i*0.2, 0.8, 1.5 - i*0.2);
-            const snow = new THREE.Mesh(snowGeo, snowMat);
-            snow.position.y = 4 + i;
-            group.add(snow);
-        }
-        group.position.set(x, 0, z);
-        this.scene.add(group);
-    }
+            // 4. Biome Generation
+            if(this.water) this.water.createLake(30, 30, 20);
+            this.populateWorld();
 
-    // --- MASTER SPAWNER ---
-    spawnAllBiomes(density = 120) {
-        for(let i = 0; i < density; i++) {
-            const rx = (Math.random() - 0.5) * 300;
-            const rz = (Math.random() - 0.5) * 300;
+            this.isInitialized = true;
+            this.gameLoop();
+            
+            window.GameInstance = this;
+            console.log("%c [SYSTEM] Amazon & Snow Biomes Online", "color: #00ff00; font-weight: bold;");
 
-            if (rz < -50) { 
-                // North Side: Snow Biome
-                if (Math.random() > 0.6) this.createSnowHill(rx, rz);
-                else this.createSnowTree(rx, rz);
-            } else {
-                // South Side: Amazon Jungle
-                const type = Math.random();
-                if(type > 0.6) this.createAmazonGiant(rx, rz);
-                else this.createPalmTree(rx, rz);
+        } catch (err) {
+            console.error("Critical Start Error:", err);
+            if(this.world) {
+                this.isInitialized = true;
+                this.gameLoop();
             }
         }
     }
+
+    initCameraControls() {
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches[0].clientX > window.innerWidth / 2) {
+                this.isSwiping = true;
+                this.touchX = e.touches[0].clientX;
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (this.isSwiping) {
+                const deltaX = e.touches[0].clientX - this.touchX;
+                this.cameraAngle -= deltaX * 0.007; 
+                this.touchX = e.touches[0].clientX;
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            this.isSwiping = false;
+        });
+    }
+
+    initHUD() {
+        const uiContainer = document.getElementById('game-ui') || document.body;
+        
+        const survivalDiv = document.getElementById('survival-hud') || document.createElement('div');
+        survivalDiv.id = 'survival-hud';
+        uiContainer.appendChild(survivalDiv);
+        
+        const combatDiv = document.createElement('div');
+        combatDiv.id = 'combat-ui';
+        combatDiv.innerHTML = CombatUI.renderCombatButtons();
+        uiContainer.appendChild(combatDiv);
+    }
+
+    populateWorld() {
+        // --- Spawning Both Biomes ---
+        if (this.env) {
+            // EnvironmentSpawner.js ka 'spawnAllBiomes' method use karein
+            this.env.spawnAllBiomes(180); 
+        }
+
+        // --- Monster Spawning ---
+        if (this.spawner) {
+            for(let i=0; i < 20; i++) {
+                const rx = (Math.random() - 0.5) * 250;
+                const rz = (Math.random() - 0.5) * 250;
+                const biome = rz < -50 ? "SNOW" : "JUNGLE";
+                this.spawner.spawnRandom(rx, rz, biome);
+            }
+        }
+    }
+
+    gameLoop() {
+        if (!this.isInitialized) return;
+
+        // 1. HUD & Survival Update
+        SurvivalSystem.update();
+        const hud = document.getElementById('survival-hud');
+        if (hud) hud.innerHTML = SurvivalUI.renderHUD(SurvivalSystem.stats);
+
+        // 2. Movement Logic
+        if (Math.abs(Joystick.moveData.x) > 0.01 || Math.abs(Joystick.moveData.y) > 0.01) {
+            if (this.playerMesh && this.playerMesh.group) {
+                const moveX = Joystick.moveData.x * Math.cos(this.cameraAngle) - Joystick.moveData.y * Math.sin(this.cameraAngle);
+                const moveZ = Joystick.moveData.x * Math.sin(this.cameraAngle) + Joystick.moveData.y * Math.cos(this.cameraAngle);
+                
+                this.playerMesh.updatePosition({ x: moveX, y: moveZ });
+                this.playerMesh.group.rotation.y = Math.atan2(moveX, moveZ);
+            }
+        }
+
+        // 3. Biome Effects & Camera Follow
+        if (this.playerMesh) {
+            const pPos = this.playerMesh.group.position;
+
+            // Biome Sensing: Fog aur Lighting change karein
+            if (pPos.z < -50) {
+                // Snow Area: White Fog & Bright Light
+                this.world.scene.fog = new THREE.Fog(0xffffff, 10, 100);
+            } else {
+                // Jungle Area: Green Fog & Tropical Light
+                this.world.scene.fog = new THREE.Fog(0x1a3d00, 10, 150);
+            }
+
+            const orbitDist = 18;
+            this.world.camera.position.x = pPos.x + orbitDist * Math.sin(this.cameraAngle);
+            this.world.camera.position.z = pPos.z + orbitDist * Math.cos(this.cameraAngle);
+            this.world.camera.position.y = pPos.y + 12; 
+            this.world.camera.lookAt(pPos.x, pPos.y + 2, pPos.z);
+        }
+
+        // 4. Render
+        if (this.world) {
+            this.world.render(this.world.scene, this.world.camera);
+        }
+
+        requestAnimationFrame(() => this.gameLoop());
+    }
 }
+
+export const GameInstance = new PalworldMobile();
+window.addEventListener('load', () => GameInstance.start());
