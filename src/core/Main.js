@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Final Master Integration (Collision & Biome Fix)
+// Game: Palworld Mobile - Final Biome Fix & Visibility Optimization
 import { GameRenderer } from './Renderer.js';
 import { Joystick } from '../ui/Joystick.js';
 import { PlayerModel } from '../entities/PlayerModel.js';
@@ -26,7 +26,7 @@ class PalworldMobile {
     }
 
     async start() {
-        console.log("%c [BOOT] Initializing 4km Map with Collision...", "color: #00ffff; font-weight: bold;");
+        console.log("%c [BOOT] Zenith OS: Biome Optimization Engine...", "color: #00ffff; font-weight: bold;");
         
         try {
             this.world = new GameRenderer();
@@ -49,7 +49,7 @@ class PalworldMobile {
             this.gameLoop();
             
             window.GameInstance = this;
-            console.log("%c [SYSTEM] World Ready - Collision Enabled", "color: #00ff00; font-weight: bold;");
+            console.log("%c [SYSTEM] Visibility Balanced - World Ready", "color: #00ff00; font-weight: bold;");
 
         } catch (err) {
             console.error("Boot Error:", err);
@@ -90,29 +90,26 @@ class PalworldMobile {
 
     populateWorld() {
         if (this.env) {
-            this.env.spawnAllBiomes(350); 
+            // Increased density for 4km map
+            this.env.spawnAllBiomes(400); 
         }
 
         if (this.spawner) {
-            for(let i=0; i < 25; i++) {
-                const rx = (Math.random() - 0.5) * 500;
-                const rz = (Math.random() - 0.5) * 500;
+            for(let i=0; i < 30; i++) {
+                const rx = (Math.random() - 0.5) * 800;
+                const rz = (Math.random() - 0.5) * 800;
                 const biomeType = rz < -60 ? "SNOW" : "JUNGLE";
                 this.spawner.spawnRandom(rx, rz, biomeType);
             }
         }
     }
 
-    // --- NEW: Collision Helper ---
     checkCollision(nextX, nextZ) {
         if (!this.env || !this.env.collidables) return false;
-        
         for (let obj of this.env.collidables) {
             const dx = nextX - obj.x;
             const dz = nextZ - obj.z;
-            const distance = Math.sqrt(dx * dx + dz * dz);
-            
-            if (distance < obj.radius) return true; // Collision detected
+            if (Math.sqrt(dx * dx + dz * dz) < obj.radius) return true;
         }
         return false;
     }
@@ -124,17 +121,15 @@ class PalworldMobile {
         const hud = document.getElementById('survival-hud');
         if (hud) hud.innerHTML = SurvivalUI.renderHUD(SurvivalSystem.stats);
 
-        // --- Movement with Collision ---
+        // --- Movement & Collision ---
         if (Math.abs(Joystick.moveData.x) > 0.01 || Math.abs(Joystick.moveData.y) > 0.01) {
             if (this.playerMesh && this.playerMesh.group) {
                 const moveX = Joystick.moveData.x * Math.cos(this.cameraAngle) - Joystick.moveData.y * Math.sin(this.cameraAngle);
                 const moveZ = Joystick.moveData.x * Math.sin(this.cameraAngle) + Joystick.moveData.y * Math.cos(this.cameraAngle);
                 
-                // Agli position calculate karein
-                const nextX = this.playerMesh.group.position.x + moveX * 0.25;
-                const nextZ = this.playerMesh.group.position.z + moveZ * 0.25;
+                const nextX = this.playerMesh.group.position.x + moveX * 0.3;
+                const nextZ = this.playerMesh.group.position.z + moveZ * 0.3;
 
-                // Check karein ki rasta saaf hai ya nahi
                 if (!this.checkCollision(nextX, nextZ)) {
                     this.playerMesh.updatePosition({ x: moveX, y: moveZ });
                     this.playerMesh.group.rotation.y = Math.atan2(moveX, moveZ);
@@ -142,30 +137,22 @@ class PalworldMobile {
             }
         }
 
-        // --- Camera & Biome Effects ---
+        // --- Camera & Biome Sensitivity (Fixed Visibility) ---
         if (this.playerMesh) {
             const pPos = this.playerMesh.group.position;
 
             if (pPos.z < -60) {
-                this.world.scene.fog = new THREE.Fog(0xffffff, 10, 100);
+                // Snow Biome: Soft Icy Blue Fog (Preventing Washout)
+                this.world.scene.fog = new THREE.Fog(0xcedce0, 15, 130);
+                this.world.scene.background = new THREE.Color(0xcedce0);
             } else {
-                this.world.scene.fog = new THREE.Fog(0x1a3d00, 10, 150);
+                // Jungle Biome: Deep Green Fog
+                this.world.scene.fog = new THREE.Fog(0x1a3d00, 10, 160);
+                this.world.scene.background = new THREE.Color(0x87ceeb);
             }
 
-            const orbitDist = 18;
+            const orbitDist = 20; // Increased for better view of giants
             this.world.camera.position.x = pPos.x + orbitDist * Math.sin(this.cameraAngle);
             this.world.camera.position.z = pPos.z + orbitDist * Math.cos(this.cameraAngle);
-            this.world.camera.position.y = pPos.y + 12; 
-            this.world.camera.lookAt(pPos.x, pPos.y + 2, pPos.z);
-        }
-
-        if (this.world) {
-            this.world.render(this.world.scene, this.world.camera);
-        }
-
-        requestAnimationFrame(() => this.gameLoop());
-    }
-}
-
-export const GameInstance = new PalworldMobile();
-window.addEventListener('load', () => GameInstance.start());
+            this.world.camera.position.y = pPos.y + 14; 
+            this.world.camera.lookAt
