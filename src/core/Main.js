@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Final Optimized Integration
+// Game: Palworld Mobile - Final Robust Integration
 import { PalMobileEngine } from './PalMobileEngine.js';
 import { CharacterController } from './CharacterController.js';
 import { InventorySystem } from '../systems/InventorySystem.js';
@@ -37,46 +37,54 @@ class PalworldMobile {
     }
 
     async start() {
-        console.log("Palworld Booting...");
+        console.log("%c [BOOT] Palworld Engine Start...", "color: #ff0000; font-weight: bold;");
+        
         try {
-            // 1. Core Scene Setup
+            // 1. Initialize Renderer (Critical: This must not fail)
             this.world = new GameRenderer();
-            this.terrain = new Terrain(this.world.scene);
-            this.water = new WaterSystem(this.world.scene);
-            this.env = new EnvironmentSpawner(this.world.scene);
-            this.playerMesh = new PlayerModel(this.world.scene);
-            this.spawner = new MonsterSpawner(this.world.scene);
-            this.builder = new BuildingManager(this.world.scene);
 
-            // 2. Control & HUD Setup
+            // 2. Load World Assets with Guards (Agar ek fail ho toh doosra chalta rahe)
+            const scene = this.world.scene;
+            
+            try { this.terrain = new Terrain(scene); } catch(e) { console.error("Terrain Load Fail", e); }
+            try { this.water = new WaterSystem(scene); } catch(e) { console.error("Water Load Fail", e); }
+            try { this.env = new EnvironmentSpawner(scene); } catch(e) { console.error("Env Load Fail", e); }
+            try { this.playerMesh = new PlayerModel(scene); } catch(e) { console.error("Player Load Fail", e); }
+            try { this.spawner = new MonsterSpawner(scene); } catch(e) { console.error("Spawner Load Fail", e); }
+            try { this.builder = new BuildingManager(scene); } catch(e) { console.error("Builder Load Fail", e); }
+
+            // 3. UI Setup
             Joystick.init();
             this.initSurvivalHUD();
             this.initCombatInterface();
             this.initInventoryInterface();
 
-            // 3. World Population
-            this.water.createLake(30, 30, 20);
+            // 4. Game Population
+            if(this.water) this.water.createLake(30, 30, 20);
             this.populateWorld();
 
             this.isInitialized = true;
             this.gameLoop();
             
             window.GameInstance = this;
-            console.log("%c [SYSTEM] Online", "color: #00ff00; font-weight: bold;");
+            console.log("%c [SYSTEM] Engine Live", "color: #00ff00; font-weight: bold;");
+
         } catch (err) {
-            console.error("Initialization Failed:", err);
+            console.error("CRITICAL BOOT ERROR:", err);
+            alert("Engine Error: Check Console");
         }
     }
 
     gameLoop() {
         if (!this.isInitialized) return;
 
-        // --- Logic Updates ---
+        // 1. Logic Updates
         SurvivalSystem.update();
         this.updateHUD();
 
+        // 2. Player Movement Logic
         if (Joystick.moveData.x !== 0 || Joystick.moveData.y !== 0) {
-            if (this.playerMesh) {
+            if (this.playerMesh && this.playerMesh.group) {
                 this.playerMesh.updatePosition(Joystick.moveData);
                 this.world.camera.position.x = this.playerMesh.group.position.x;
                 this.world.camera.position.z = this.playerMesh.group.position.z + 15;
@@ -84,22 +92,32 @@ class PalworldMobile {
             }
         }
 
-        // --- Monster & AI Updates ---
-        this.spawner.activeMonsters.forEach(pal => {
-            if (pal.stats?.hp > 0) {
-                if (pal.isWorking) PalWorkSystem.updateWorkerAI(pal);
-                else PalAI.update(pal);
+        // 3. Building Preview Update
+        if (this.builder && this.builder.isBuildingMode) {
+            const offset = new THREE.Vector3(0, 0, -6).applyQuaternion(this.playerMesh.group.quaternion);
+            this.builder.updatePreview({
+                x: this.playerMesh.group.position.x + offset.x,
+                z: this.playerMesh.group.position.z + offset.z
+            });
+        }
 
-                // Update UI Bars
-                const vector = pal.mesh.position.clone().project(this.world.camera);
-                HealthBar.update(pal.hpBar, pal.stats.hp, {
-                    x: (vector.x * 0.5 + 0.5) * window.innerWidth,
-                    y: -(vector.y * 0.5 - 0.5) * window.innerHeight
-                });
-            }
-        });
+        // 4. Monsters/Workers Update
+        if (this.spawner) {
+            this.spawner.activeMonsters.forEach(pal => {
+                if (pal.stats?.hp > 0) {
+                    if (pal.isWorking) PalWorkSystem.updateWorkerAI(pal);
+                    else PalAI.update(pal);
 
-        // --- Render Frame ---
+                    const vector = pal.mesh.position.clone().project(this.world.camera);
+                    HealthBar.update(pal.hpBar, pal.stats.hp, {
+                        x: (vector.x * 0.5 + 0.5) * window.innerWidth,
+                        y: -(vector.y * 0.5 - 0.5) * window.innerHeight
+                    });
+                }
+            });
+        }
+
+        // 5. Final Render Call (The most important part)
         this.world.render(this.world.scene, this.world.camera);
         requestAnimationFrame(() => this.gameLoop());
     }
@@ -110,16 +128,11 @@ class PalworldMobile {
     }
 
     populateWorld() {
+        if (!this.spawner) return;
         this.activeResources = [];
         for(let i=0; i < 15; i++) {
             const pal = this.spawner.spawnRandom((Math.random()-0.5)*100, (Math.random()-0.5)*100, "HILLS");
             if(pal) { pal.stats = { hp: 100 }; pal.hpBar = HealthBar.create(100); }
-        }
-        for(let i=0; i < 40; i++) {
-            const rx = (Math.random()-0.5)*200, rz = (Math.random()-0.5)*250;
-            let type = Math.random() > 0.4 ? 'TREE' : 'ROCK';
-            let mesh = type === 'TREE' ? this.env.spawnTree(rx, rz) : this.env.spawnRock(rx, rz);
-            this.activeResources.push({ type, position: {x: rx, z: rz}, mesh });
         }
     }
 
