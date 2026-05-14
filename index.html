@@ -5,24 +5,88 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Palworld Mobile - Premium Edition</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; color: #fff; font-family: 'Orbitron', sans-serif; }
-        #game-canvas { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; background: #000; }
-        #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-        button { pointer-events: auto; cursor: pointer; }
+        /* Base Styles */
+        body { 
+            margin: 0; 
+            padding: 0;
+            background: #000; 
+            overflow: hidden; 
+            color: #fff; 
+            font-family: 'Orbitron', sans-serif; 
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 3D World Container */
+        #game-canvas { 
+            width: 100vw; 
+            height: 100vh; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            background: #000;
+            z-index: 1; /* World niche rahega */
+        }
+
+        /* UI Layer (Buttons, Joysticks, HUD) */
+        #game-ui { 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            pointer-events: none; /* Mouse/Touch world tak pahunche */
+            z-index: 10; /* UI hamesha upar rahega */
+        }
+
+        /* Ensure interactive elements inside UI can be clicked */
+        #game-ui button, 
+        #game-ui .joystick-base, 
+        #game-ui .inventory-overlay { 
+            pointer-events: auto; 
+        }
+
+        button { 
+            cursor: pointer; 
+            border: none;
+            outline: none;
+        }
+
+        /* Loading Screen (Optional but good for feedback) */
+        #loading-screen {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 0.5s;
+        }
     </style>
 </head>
 <body>
+
     <div id="game-canvas"></div>
-    <div id="game-ui"></div>
+
+    <div id="game-ui">
+        </div>
 
     <script type="module">
-        // Braces hata diye hain agar export default hai, 
-        // par aapki file ke liye hum direct path use karenge
+        // Path check karein: Agar Main.js direct instance export karta hai
         import { GameInstance } from './src/core/Main.js';
         
         window.addEventListener('load', () => {
-            console.log("Game Initialization Start...");
-            GameInstance.start().catch(err => console.error("Start Error:", err));
+            console.log("%c [SYSTEM] Initializing Game Instance...", "color: #ff0000; font-weight: bold;");
+            
+            GameInstance.start()
+                .then(() => {
+                    console.log("[SYSTEM] Palworld Mobile Started Successfully!");
+                })
+                .catch(err => {
+                    console.error("[CRITICAL ERROR] Failed to start game:", err);
+                });
         });
     </script>
 </body>
