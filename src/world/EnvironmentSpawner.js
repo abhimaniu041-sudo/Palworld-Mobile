@@ -1,9 +1,11 @@
-// Game: Palworld Mobile - Biome Master (Amazon & Snow Hills)
+// Game: Palworld Mobile - Master Biome Spawner (Collision & Colors Fixed)
 import * as THREE from 'https://cdn.skypack.dev/three@0.132.2';
 
 export class EnvironmentSpawner {
     constructor(scene) {
         this.scene = scene;
+        // Collision detection ke liye pahaadon ka data yahan save hoga
+        this.collidables = []; 
     }
 
     // --- AMAZON JUNGLE ASSETS ---
@@ -30,25 +32,25 @@ export class EnvironmentSpawner {
     // --- SNOW BIOME ASSETS ---
     createSnowHill(x, z) {
         const group = new THREE.Group();
-        const height = 20 + Math.random() * 30;
+        const height = 25 + Math.random() * 35; // Increased height for hills
         const radius = 25 + Math.random() * 20;
         
-        // 1. Snow Patch (Zameen ko white karne ke liye)
-        const patchGeo = new THREE.CircleGeometry(radius * 2, 12);
+        // 1. Snow Patch (Zameen ko white cover dene ke liye)
+        const patchGeo = new THREE.CircleGeometry(radius * 1.8, 12);
         const patchMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
         const patch = new THREE.Mesh(patchGeo, patchMat);
         patch.rotation.x = -Math.PI / 2;
-        patch.position.y = 0.1; // Green floor ke just upar
+        patch.position.y = 0.1;
         group.add(patch);
 
-        // 2. Main Hill
+        // 2. Main Hill Body
         const hillGeo = new THREE.ConeGeometry(radius, height, 8);
-        const hillMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
+        const hillMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
         const hill = new THREE.Mesh(hillGeo, hillMat);
         hill.position.y = height / 2;
         group.add(hill);
 
-        // 3. Ice Peak (Shinier top)
+        // 3. Ice Peak (Shinier top layer)
         const peakGeo = new THREE.ConeGeometry(radius * 0.4, height * 0.4, 8);
         const peakMat = new THREE.MeshStandardMaterial({ color: 0xe0ffff, emissive: 0x112222 });
         const peak = new THREE.Mesh(peakGeo, peakMat);
@@ -57,23 +59,31 @@ export class EnvironmentSpawner {
 
         group.position.set(x, 0, z);
         this.scene.add(group);
+
+        // --- COLLISION DATA ---
+        // Pahaad ke radius ko collision array mein add karein
+        this.collidables.push({
+            x: x,
+            z: z,
+            radius: radius * 0.85 // Base se thoda kam area solid rahega
+        });
     }
 
     createSnowTree(x, z) {
         const group = new THREE.Group();
-        // Frozen Trunk
+        // Frozen Dark Trunk
         const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 6, 6);
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a }); // Dark almost black
         const trunk = new THREE.Mesh(trunkGeo, trunkMat);
         trunk.position.y = 3;
         group.add(trunk);
 
-        // Snow Layers
+        // Snow-covered Cone Layers (White instead of Green)
         const snowMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
         for(let i=0; i<4; i++) {
-            const snowGeo = new THREE.ConeGeometry(2 - i*0.4, 1.5, 8);
+            const snowGeo = new THREE.ConeGeometry(2 - i*0.4, 1.8, 8);
             const snow = new THREE.Mesh(snowGeo, snowMat);
-            snow.position.y = 4 + (i * 1.2);
+            snow.position.y = 4.5 + (i * 1.3);
             group.add(snow);
         }
         group.position.set(x, 0, z);
@@ -81,10 +91,12 @@ export class EnvironmentSpawner {
     }
 
     // --- MASTER SPAWNER ---
-    // Ise Main.js se call karein: this.env.spawnAllBiomes(250);
     spawnAllBiomes(density = 250) {
+        // Purane objects clear karna zaroori hai agar re-spawn ho
+        this.collidables = []; 
+        
         for(let i = 0; i < density; i++) {
-            const rx = (Math.random() - 0.5) * 600; // Large 4km map scale
+            const rx = (Math.random() - 0.5) * 600; 
             const rz = (Math.random() - 0.5) * 600;
 
             if (rz < -60) { 
@@ -100,7 +112,7 @@ export class EnvironmentSpawner {
                 if(rand > 0.7) {
                     this.createAmazonGiant(rx, rz);
                 } else if(rand > 0.4) {
-                    // Tropical Palm logic (if needed) or Bush
+                    // Small Jungle Bush
                     const bushGeo = new THREE.IcosahedronGeometry(2, 0);
                     const bushMat = new THREE.MeshStandardMaterial({ color: 0x0a3d00 });
                     const bush = new THREE.Mesh(bushGeo, bushMat);
