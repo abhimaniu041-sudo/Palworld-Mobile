@@ -6,7 +6,7 @@
     <title>Palworld Mobile - Premium Edition</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; color: #fff; font-family: 'Orbitron', sans-serif; }
-        #game-canvas { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        #game-canvas { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; background: #000; }
         #game-ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
         button { pointer-events: auto; cursor: pointer; }
     </style>
@@ -16,11 +16,13 @@
     <div id="game-ui"></div>
 
     <script type="module">
+        // Braces hata diye hain agar export default hai, 
+        // par aapki file ke liye hum direct path use karenge
         import { GameInstance } from './src/core/Main.js';
         
         window.addEventListener('load', () => {
-            console.log("Game Loading...");
-            GameInstance.start();
+            console.log("Game Initialization Start...");
+            GameInstance.start().catch(err => console.error("Start Error:", err));
         });
     </script>
 </body>
