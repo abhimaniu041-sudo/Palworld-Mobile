@@ -1,69 +1,57 @@
-// Game: Palworld Mobile - Master Integration (Ultimate Visibility Fix)
+// Game: Palworld Mobile - Final Movement & Entity Integration
 import { GameRenderer } from './Renderer.js';
 import { Joystick } from '../ui/Joystick.js';
 
-// --- Try-Catch Modules (Inme se koi missing ho toh game crash nahi hoga) ---
-let Terrain, WaterSystem, EnvironmentSpawner, PlayerModel, MonsterSpawner, BuildingManager;
-let SurvivalSystem, SurvivalUI, CombatUI, InventoryMenu, HealthBar, PalAI, PalWorkSystem;
-
-async function loadModules() {
-    try { Terrain = (await import('../world/Terrain.js')).Terrain; } catch(e) {}
-    try { WaterSystem = (await import('../world/WaterSystem.js')).WaterSystem; } catch(e) {}
-    try { EnvironmentSpawner = (await import('../world/EnvironmentSpawner.js')).EnvironmentSpawner; } catch(e) {}
-    try { PlayerModel = (await import('../entities/PlayerModel.js')).PlayerModel; } catch(e) {}
-    try { MonsterSpawner = (await import('../entities/MonsterSpawner.js')).MonsterSpawner; } catch(e) {}
-    try { BuildingManager = (await import('../world/BuildingManager.js')).BuildingManager; } catch(e) {}
-    try { SurvivalSystem = (await import('../systems/SurvivalSystem.js')).SurvivalSystem; } catch(e) {}
-    try { SurvivalUI = (await import('../ui/SurvivalUI.js')).SurvivalUI; } catch(e) {}
-    try { CombatUI = (await import('../ui/CombatUI.js')).CombatUI; } catch(e) {}
-    try { InventoryMenu = (await import('../ui/InventoryMenu.js')).InventoryMenu; } catch(e) {}
-    try { HealthBar = (await import('../ui/HealthBar.js')).HealthBar; } catch(e) {}
-    try { PalAI = (await import('../entities/PalAI_Advanced.js')).PalAI; } catch(e) {}
-    try { PalWorkSystem = (await import('../entities/PalAI_Work.js')).PalWorkSystem; } catch(e) {}
-}
+// --- Direct Imports (Safe version for Vercel/GitHub) ---
+import { PlayerModel } from '../entities/PlayerModel.js';
+import { MonsterSpawner } from '../entities/MonsterSpawner.js';
+import { Terrain } from '../world/Terrain.js';
+import { WaterSystem } from '../world/WaterSystem.js';
+import { EnvironmentSpawner } from '../world/EnvironmentSpawner.js';
+import { SurvivalSystem } from '../systems/SurvivalSystem.js';
+import { SurvivalUI } from '../ui/SurvivalUI.js';
+import { CombatUI } from '../ui/CombatUI.js';
 
 class PalworldMobile {
     constructor() {
         this.world = null;
         this.playerMesh = null;
+        this.spawner = null;
         this.isInitialized = false;
     }
 
     async start() {
-        console.log("%c [BOOT] Engine Starting...", "color: #ff0000; font-weight: bold;");
+        console.log("%c [BOOT] Starting Game Engine...", "color: #ff0000; font-weight: bold;");
         
         try {
-            // 1. Core Rendering Setup (Must Work)
+            // 1. Initialize Renderer (Sky/Floor)
             this.world = new GameRenderer();
-            
-            // 2. Load other modules asynchronously
-            await loadModules();
-
-            // 3. Initialize World Objects if modules loaded
             const scene = this.world.scene;
-            if (Terrain) this.terrain = new Terrain(scene);
-            if (WaterSystem) {
-                this.water = new WaterSystem(scene);
-                this.water.createLake(30, 30, 20);
-            }
-            if (EnvironmentSpawner) this.env = new EnvironmentSpawner(scene);
-            if (PlayerModel) this.playerMesh = new PlayerModel(scene);
-            if (MonsterSpawner) this.spawner = new MonsterSpawner(scene);
-            if (BuildingManager) this.builder = new BuildingManager(scene);
 
-            // 4. UI Setup
+            // 2. Load World & Entities (Directly)
+            this.terrain = new Terrain(scene);
+            this.water = new WaterSystem(scene);
+            this.env = new EnvironmentSpawner(scene);
+            this.playerMesh = new PlayerModel(scene);
+            this.spawner = new MonsterSpawner(scene);
+
+            // 3. UI Setup
             Joystick.init();
             this.initHUD();
+
+            // 4. World Population
+            this.water.createLake(30, 30, 20);
+            this.populateWorld();
 
             this.isInitialized = true;
             this.gameLoop();
             
             window.GameInstance = this;
-            console.log("%c [SYSTEM] Engine Online - Visuals Forced", "color: #00ff00; font-weight: bold;");
+            console.log("%c [SYSTEM] Engine Online - Entities Loaded", "color: #00ff00; font-weight: bold;");
 
         } catch (err) {
             console.error("Critical Start Error:", err);
-            // Engine failsafe: even on error, try to start loop if renderer exists
+            // Engine failsafe
             if(this.world) {
                 this.isInitialized = true;
                 this.gameLoop();
@@ -76,39 +64,47 @@ class PalworldMobile {
         hud.id = 'survival-hud';
         document.body.appendChild(hud);
         
-        // Combat UI check
-        if (CombatUI) {
-            const container = document.getElementById('game-ui') || document.body;
-            const combatDiv = document.createElement('div');
-            combatDiv.innerHTML = CombatUI.renderCombatButtons();
-            container.appendChild(combatDiv);
+        const container = document.getElementById('game-ui') || document.body;
+        const combatDiv = document.createElement('div');
+        combatDiv.innerHTML = CombatUI.renderCombatButtons();
+        container.appendChild(combatDiv);
+    }
+
+    populateWorld() {
+        if (!this.spawner) return;
+        // Spawn 10 Pals initially
+        for(let i=0; i < 10; i++) {
+            const rx = (Math.random() - 0.5) * 80;
+            const rz = (Math.random() - 0.5) * 80;
+            this.spawner.spawnRandom(rx, rz, "HILLS");
         }
     }
 
     gameLoop() {
         if (!this.isInitialized) return;
 
-        // 1. Logic Updates (Survival)
-        if (SurvivalSystem && SurvivalUI) {
-            SurvivalSystem.update();
-            const hud = document.getElementById('survival-hud');
-            if (hud) hud.innerHTML = SurvivalUI.renderHUD(SurvivalSystem.stats);
-        }
+        // 1. Logic Updates
+        SurvivalSystem.update();
+        const hud = document.getElementById('survival-hud');
+        if (hud) hud.innerHTML = SurvivalUI.renderHUD(SurvivalSystem.stats);
 
-        // 2. Player Movement
+        // 2. Player Movement & Camera Follow
         if (Joystick.moveData.x !== 0 || Joystick.moveData.y !== 0) {
             if (this.playerMesh && this.playerMesh.group) {
+                // Move Player
                 this.playerMesh.updatePosition(Joystick.moveData);
-                this.world.camera.position.x = this.playerMesh.group.position.x;
-                this.world.camera.position.z = this.playerMesh.group.position.z + 15;
-                this.world.camera.lookAt(this.playerMesh.group.position);
+
+                // Update Camera to follow player
+                const pPos = this.playerMesh.group.position;
+                this.world.camera.position.x = pPos.x;
+                this.world.camera.position.z = pPos.z + 15;
+                this.world.camera.position.y = pPos.y + 10;
+                this.world.camera.lookAt(pPos);
             }
         }
 
-        // 3. AI & Render Call
-        if (this.world) {
-            this.world.render(this.world.scene, this.world.camera);
-        }
+        // 3. Render Call
+        this.world.render(this.world.scene, this.world.camera);
 
         requestAnimationFrame(() => this.gameLoop());
     }
