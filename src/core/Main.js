@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Final Optimized Integration (Anti-Black Screen Edition)
+// Game: Palworld Mobile - Professional Master Integration (Visibility & Crash Fix)
 import { GameRenderer } from './Renderer.js';
 import { Joystick } from '../ui/Joystick.js';
 import { PlayerModel } from '../entities/PlayerModel.js';
@@ -19,50 +19,55 @@ class PalworldMobile {
         this.env = null;
         this.isInitialized = false;
 
-        // Camera & Rotation Logic
         this.cameraAngle = 0; 
         this.touchX = 0;
         this.isSwiping = false;
     }
 
     async start() {
-        console.log("%c [BOOT] Zenith OS: Starting 3D Engine...", "color: #00ffff; font-weight: bold;");
+        console.log("%c [BOOT] Zenith OS Engine: Force Rendering Mode...", "color: #00ffff; font-weight: bold;");
         
         try {
-            // 1. Core Scene Setup
+            // 1. Renderer Setup
             this.world = new GameRenderer();
             const scene = this.world.scene;
 
-            // 2. Load World Assets (With Individual Failsafes)
-            try { this.terrain = new Terrain(scene); } catch(e) { console.warn("Terrain Init Failed"); }
-            try { this.water = new WaterSystem(scene); } catch(e) { console.warn("Water Init Failed"); }
-            try { this.env = new EnvironmentSpawner(scene); } catch(e) { console.warn("Env Init Failed"); }
-            try { this.playerMesh = new PlayerModel(scene); } catch(e) { console.warn("Player Init Failed"); }
-            try { this.spawner = new MonsterSpawner(scene); } catch(e) { console.warn("Spawner Init Failed"); }
+            // --- EMERGENCY VISIBILITY FLOOR ---
+            // Agar main terrain crash ho jaye, toh ye green floor dikhega
+            const floorGeo = new THREE.PlaneGeometry(2000, 2000);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x228b22, side: THREE.DoubleSide });
+            const testFloor = new THREE.Mesh(floorGeo, floorMat);
+            testFloor.rotation.x = Math.PI / 2;
+            testFloor.position.y = -0.05;
+            scene.add(testFloor);
 
-            // 3. UI & Control Setup
+            // 2. Asset Loading (With Failsafes)
+            try { this.terrain = new Terrain(scene); } catch(e) { console.warn("Terrain skip"); }
+            try { this.water = new WaterSystem(scene); } catch(e) { console.warn("Water skip"); }
+            try { this.env = new EnvironmentSpawner(scene); } catch(e) { console.warn("Env skip"); }
+            try { this.playerMesh = new PlayerModel(scene); } catch(e) { console.warn("Player skip"); }
+            try { this.spawner = new MonsterSpawner(scene); } catch(e) { console.warn("Spawner skip"); }
+
+            // 3. UI & Controls
             this.initHUD();
             Joystick.init(); 
             this.initCameraControls();
 
-            // 4. World Spawning
+            // 4. Populate World
             if (this.env && typeof this.env.spawnAllBiomes === 'function') {
                 this.env.spawnAllBiomes(400); 
             }
             this.populateMonsters();
 
-            // 5. Final Engine Ready Check
+            // 5. Engine Ignition
             this.isInitialized = true;
             this.gameLoop();
             
-            // Remove Loading Screen
             this.removeLoader();
             window.GameInstance = this;
             
-            console.log("%c [SYSTEM] World Ready - Navigation Active", "color: #00ff00; font-weight: bold;");
-
         } catch (err) {
-            console.error("CRITICAL ENGINE ERROR:", err);
+            console.error("BOOT CRASH:", err);
             this.removeLoader();
         }
     }
@@ -77,7 +82,7 @@ class PalworldMobile {
 
     populateMonsters() {
         if (!this.spawner) return;
-        for(let i=0; i < 25; i++) {
+        for(let i=0; i < 30; i++) {
             const rx = (Math.random() - 0.5) * 800;
             const rz = (Math.random() - 0.5) * 800;
             const biome = rz < -60 ? "SNOW" : "JUNGLE";
@@ -91,16 +96,14 @@ class PalworldMobile {
                 this.isSwiping = true;
                 this.touchX = e.touches[0].clientX;
             }
-        }, { passive: false });
-
+        });
         window.addEventListener('touchmove', (e) => {
             if (this.isSwiping) {
                 const deltaX = e.touches[0].clientX - this.touchX;
                 this.cameraAngle -= deltaX * 0.007; 
                 this.touchX = e.touches[0].clientX;
             }
-        }, { passive: false });
-
+        });
         window.addEventListener('touchend', () => { this.isSwiping = false; });
     }
 
@@ -121,8 +124,7 @@ class PalworldMobile {
         for (let obj of this.env.collidables) {
             const dx = nextX - obj.x;
             const dz = nextZ - obj.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            if (dist < (obj.radius || 5)) return true;
+            if (Math.sqrt(dx * dx + dz * dz) < (obj.radius || 5)) return true;
         }
         return false;
     }
@@ -134,7 +136,7 @@ class PalworldMobile {
         const hud = document.getElementById('survival-hud');
         if (hud) hud.innerHTML = SurvivalUI.renderHUD(SurvivalSystem.stats);
 
-        // --- Movement Logic ---
+        // Movement & Collision Logic
         if (Math.abs(Joystick.moveData.x) > 0.01 || Math.abs(Joystick.moveData.y) > 0.01) {
             if (this.playerMesh && this.playerMesh.group) {
                 const moveX = Joystick.moveData.x * Math.cos(this.cameraAngle) - Joystick.moveData.y * Math.sin(this.cameraAngle);
@@ -150,11 +152,10 @@ class PalworldMobile {
             }
         }
 
-        // --- Camera Orbit & Biome Sensing ---
+        // Camera Orbit & Biome Sensing
         if (this.playerMesh && this.playerMesh.group) {
             const pPos = this.playerMesh.group.position;
 
-            // Fog & Lighting Transitions
             if (pPos.z < -60) {
                 this.world.scene.fog = new THREE.Fog(0xcedce0, 15, 140);
                 this.world.scene.background = new THREE.Color(0xcedce0);
@@ -163,17 +164,14 @@ class PalworldMobile {
                 this.world.scene.background = new THREE.Color(0x87ceeb);
             }
 
-            const orbitDist = 20;
+            const orbitDist = 22;
             const camX = pPos.x + orbitDist * Math.sin(this.cameraAngle);
             const camZ = pPos.z + orbitDist * Math.cos(this.cameraAngle);
-            const camY = pPos.y + 14;
-
-            // Update camera position smoothly
-            this.world.camera.position.set(camX, camY, camZ);
+            this.world.camera.position.set(camX, pPos.y + 15, camZ);
             this.world.camera.lookAt(pPos.x, pPos.y + 2, pPos.z);
         }
 
-        // Final Rendering
+        // --- FINAL RENDER CALL ---
         if (this.world) {
             this.world.render(this.world.scene, this.world.camera);
         }
