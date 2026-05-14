@@ -1,48 +1,68 @@
+// Game: Palworld Mobile - Professional 3D Renderer (Fix for Black Screen)
 import * as THREE from 'https://cdn.skypack.dev/three@0.132.2';
 
 export class GameRenderer {
     constructor() {
+        // 1. Scene & Sky Setup
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x87ceeb); // Sky Blue
+        this.scene.background = new THREE.Color(0x87ceeb); // Bright Sky Blue
 
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        
+        // 2. Camera Setup (Optimized for 4km Map)
+        this.camera = new THREE.PerspectiveCamera(
+            75, 
+            window.innerWidth / window.innerHeight, 
+            0.1, 
+            3000 // Far plane increased to see distant hills
+        );
+
+        // 3. WebGL Renderer Initialization
+        this.renderer = new THREE.WebGLRenderer({ 
+            antialias: true, 
+            alpha: true,
+            powerPreference: "high-performance"
+        });
+
+        // Initialize all settings
         this.init();
     }
 
     init() {
+        // Size & Resolution
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        
-        // Canvas attach to body
+
+        // 4. Canvas DOM Placement (Crucial Fix)
         const container = document.getElementById('game-canvas') || document.body;
         container.appendChild(this.renderer.domElement);
-        
-        this.renderer.domElement.style.position = "fixed";
-        this.renderer.domElement.style.top = "0";
-        this.renderer.domElement.style.left = "0";
-        this.renderer.domElement.style.zIndex = "0"; 
 
-        // Light setup (Bright White)
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); 
+        // Style fix to ensure it's visible but behind the UI buttons
+        Object.assign(this.renderer.domElement.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100vw',
+            height: '100vh',
+            zIndex: '1', // Must be 1 to stay above background but below UI (which is 10)
+            outline: 'none'
+        });
+
+        // 5. Lighting Setup (Balanced for Amazon & Snow)
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
         this.scene.add(ambientLight);
 
-        const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
-        sunLight.position.set(10, 20, 10);
+        const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        sunLight.position.set(50, 100, 50);
         this.scene.add(sunLight);
 
-        // Green Floor (Testing ke liye)
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(1000, 1000),
-            new THREE.MeshStandardMaterial({ color: 0x228b22 })
-        );
-        floor.rotation.x = -Math.PI / 2;
-        this.scene.add(floor);
+        // Hemispherical light for natural ground/sky reflections
+        const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x1a3d00, 0.5);
+        this.scene.add(hemiLight);
 
-        this.camera.position.set(0, 15, 25);
+        // 6. Initial Camera Placement (Avoids starting in the dark)
+        this.camera.position.set(0, 20, 25);
         this.camera.lookAt(0, 0, 0);
 
+        // Resize Listener
         window.addEventListener('resize', () => {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
@@ -50,6 +70,7 @@ export class GameRenderer {
         });
     }
 
+    // Main Render Loop call from Main.js
     render(scene, camera) {
         if (this.renderer && scene && camera) {
             this.renderer.render(scene, camera);
