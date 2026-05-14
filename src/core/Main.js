@@ -1,4 +1,4 @@
-// Game: Palworld Mobile - Final Optimized Integration (UI & Control Restore)
+// Game: Palworld Mobile - Final Landscape & 360° Camera Update
 import { GameRenderer } from './Renderer.js';
 import { Joystick } from '../ui/Joystick.js';
 import { PlayerModel } from '../entities/PlayerModel.js';
@@ -17,28 +17,31 @@ class PalworldMobile {
         this.playerMesh = null;
         this.spawner = null;
         this.isInitialized = false;
+
+        // Camera Rotation Logic
+        this.cameraAngle = 0; 
+        this.touchX = 0;
+        this.isSwiping = false;
     }
 
     async start() {
-        console.log("%c [BOOT] Starting Game Engine...", "color: #ff0000; font-weight: bold;");
+        console.log("%c [BOOT] Switching to Landscape Mode...", "color: #ff0000; font-weight: bold;");
         
         try {
-            // 1. Initialize 3D Renderer
             this.world = new GameRenderer();
             const scene = this.world.scene;
 
-            // 2. Load World Assets & Player
             this.terrain = new Terrain(scene);
             this.water = new WaterSystem(scene);
             this.env = new EnvironmentSpawner(scene);
             this.playerMesh = new PlayerModel(scene);
             this.spawner = new MonsterSpawner(scene);
 
-            // 3. UI Layer Setup (Z-Index check)
+            // UI & Controls
             this.initHUD();
-            Joystick.init(); // Joystick ko hamesha initHUD ke baad ya sath rakhein
+            Joystick.init(); 
+            this.initCameraControls(); // Rotation enable karein
 
-            // 4. Populate Map
             if(this.water) this.water.createLake(30, 30, 20);
             this.populateWorld();
 
@@ -46,11 +49,10 @@ class PalworldMobile {
             this.gameLoop();
             
             window.GameInstance = this;
-            console.log("%c [SYSTEM] Engine Online - Controls Active", "color: #00ff00; font-weight: bold;");
+            console.log("%c [SYSTEM] 360 Camera & Landscape Active", "color: #00ff00; font-weight: bold;");
 
         } catch (err) {
             console.error("Critical Start Error:", err);
-            // Error ke bawajood failsafe rendering
             if(this.world) {
                 this.isInitialized = true;
                 this.gameLoop();
@@ -58,30 +60,46 @@ class PalworldMobile {
         }
     }
 
+    initCameraControls() {
+        // Screen ke right side par swipe karne se camera ghumega
+        window.addEventListener('touchstart', (e) => {
+            if (e.touches[0].clientX > window.innerWidth / 2) {
+                this.isSwiping = true;
+                this.touchX = e.touches[0].clientX;
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (this.isSwiping) {
+                const deltaX = e.touches[0].clientX - this.touchX;
+                this.cameraAngle -= deltaX * 0.007; // Camera rotation sensitivity
+                this.touchX = e.touches[0].clientX;
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            this.isSwiping = false;
+        });
+    }
+
     initHUD() {
-        // Ensure UI container exists
         const uiContainer = document.getElementById('game-ui') || document.body;
         
-        // 1. Survival HUD
         const survivalDiv = document.getElementById('survival-hud') || document.createElement('div');
         survivalDiv.id = 'survival-hud';
-        survivalDiv.style.pointerEvents = "none";
         uiContainer.appendChild(survivalDiv);
         
-        // 2. Combat Buttons (ATK/DODGE)
         const combatDiv = document.createElement('div');
         combatDiv.id = 'combat-ui';
-        combatDiv.style.pointerEvents = "auto"; 
         combatDiv.innerHTML = CombatUI.renderCombatButtons();
         uiContainer.appendChild(combatDiv);
     }
 
     populateWorld() {
         if (!this.spawner) return;
-        // Spawn 10 Pals around starting area
-        for(let i=0; i < 10; i++) {
-            const rx = (Math.random() - 0.5) * 100;
-            const rz = (Math.random() - 0.5) * 100;
+        for(let i=0; i < 12; i++) {
+            const rx = (Math.random() - 0.5) * 120;
+            const rz = (Math.random() - 0.5) * 120;
             this.spawner.spawnRandom(rx, rz, "HILLS");
         }
     }
@@ -89,28 +107,38 @@ class PalworldMobile {
     gameLoop() {
         if (!this.isInitialized) return;
 
-        // --- Logic Updates ---
+        // 1. HUD Updates
         SurvivalSystem.update();
         const hud = document.getElementById('survival-hud');
         if (hud) hud.innerHTML = SurvivalUI.renderHUD(SurvivalSystem.stats);
 
-        // --- Player Movement & Camera ---
-        // Joystick data check karein (0.1 deadzone ke sath)
+        // 2. Movement relative to Camera Angle
         if (Math.abs(Joystick.moveData.x) > 0.01 || Math.abs(Joystick.moveData.y) > 0.01) {
             if (this.playerMesh && this.playerMesh.group) {
-                // Character Update
-                this.playerMesh.updatePosition(Joystick.moveData);
+                
+                // Camera angle ke mutabiq movement calculate karein
+                const moveX = Joystick.moveData.x * Math.cos(this.cameraAngle) - Joystick.moveData.y * Math.sin(this.cameraAngle);
+                const moveZ = Joystick.moveData.x * Math.sin(this.cameraAngle) + Joystick.moveData.y * Math.cos(this.cameraAngle);
+                
+                this.playerMesh.updatePosition({ x: moveX, y: moveZ });
 
-                // Camera Follow Logic
-                const pPos = this.playerMesh.group.position;
-                this.world.camera.position.x = pPos.x;
-                this.world.camera.position.z = pPos.z + 18; // Thoda piche
-                this.world.camera.position.y = pPos.y + 12; // Thoda upar
-                this.world.camera.lookAt(pPos.x, pPos.y, pPos.z);
+                // Character face rotation
+                this.playerMesh.group.rotation.y = Math.atan2(moveX, moveZ);
             }
         }
 
-        // --- Final Frame Render ---
+        // 3. Smooth Camera Orbit (Landscape Optimized)
+        if (this.playerMesh) {
+            const pPos = this.playerMesh.group.position;
+            const orbitDistance = 16; // Camera distance
+            
+            this.world.camera.position.x = pPos.x + orbitDistance * Math.sin(this.cameraAngle);
+            this.world.camera.position.z = pPos.z + orbitDistance * Math.cos(this.cameraAngle);
+            this.world.camera.position.y = pPos.y + 10; // Height
+            
+            this.world.camera.lookAt(pPos.x, pPos.y + 2, pPos.z);
+        }
+
         if (this.world) {
             this.world.render(this.world.scene, this.world.camera);
         }
