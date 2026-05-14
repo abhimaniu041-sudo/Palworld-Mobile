@@ -2,73 +2,77 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Palworld Mobile - Premium Landscape Edition</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Palworld Mobile - Zenith OS Edition</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
-    
+
     <style>
-        /* 1. Base Reset & Landscape Force */
-        body, html { 
-            margin: 0; 
-            padding: 0; 
-            width: 100%; 
-            height: 100%; 
-            background: #000; 
-            overflow: hidden; 
+        /* 1. Base Reset */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            /* FIX: Background transparent rakhein taaki Canvas dikhe */
+            background: transparent; 
+            overflow: hidden;
             font-family: 'Orbitron', sans-serif;
             color: #fff;
             user-select: none;
             touch-action: none;
         }
 
-        /* Portrait mode me warning dikhane ke liye */
+        /* Portrait Warning */
         @media screen and (orientation: portrait) {
             #portrait-warning { display: flex !important; }
         }
 
         #portrait-warning {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 9999; display: none;
-            flex-direction: column; align-items: center; justify-content: center;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             text-align: center;
         }
 
         /* 2. 3D World Canvas */
-        #game-canvas { 
-            position: absolute; 
-            top: 0; left: 0; 
-            width: 100vw; height: 100vh; 
-            z-index: 1; 
+        #game-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1; /* Piche rahega */
         }
 
         /* 3. Gaming UI Layer */
-        #game-ui { 
-            position: absolute; 
-            top: 0; left: 0; 
-            width: 100%; height: 100%; 
-            pointer-events: none; 
-            z-index: 10; 
+        #game-ui {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Allows clicks to pass through to joystick */
+            z-index: 10;
         }
 
-        /* Elements inside UI that need clicks */
-        #game-ui button, 
-        #game-ui #joystick-container,
-        #game-ui .interactive { 
-            pointer-events: auto; 
+        .interactive {
+            pointer-events: auto;
         }
 
-        /* 4. Loading Screen - Premium Dark Style */
+        /* 4. Loading Screen - Premium Zenith Style */
         #loading-screen {
             position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             background: radial-gradient(circle, #1a0000 0%, #000 100%);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             z-index: 1000;
-            transition: opacity 0.8s ease;
+            transition: opacity 0.5s ease;
         }
 
         .loader-ring {
@@ -80,10 +84,15 @@
             box-shadow: 0 0 15px #ff0000;
         }
 
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
 
-        .loading-text { margin-top: 20px; font-weight: bold; letter-spacing: 2px; color: #ff0000; }
-
+        .loading-text { 
+            margin-top: 20px; 
+            font-weight: bold; 
+            letter-spacing: 2px; 
+            color: #ff0000;
+            text-shadow: 0 0 5px #000;
+        }
     </style>
 </head>
 <body>
@@ -104,24 +113,28 @@
 
     <script type="module">
         import { GameInstance } from './src/core/Main.js';
-        
-        window.addEventListener('load', () => {
+
+        window.addEventListener('load', async () => {
             const loader = document.getElementById('loading-screen');
             
-            console.log("%c [SYSTEM] Starting Engine...", "color: #ff0000; font-weight: bold;");
-            
-            GameInstance.start()
-                .then(() => {
-                    // Game start hone ke baad loader ko fade out karein
+            console.log("%c [SYSTEM] Zenith OS Core Ignition...", "color: #ff0000; font-weight: bold;");
+
+            try {
+                // Game start karein
+                await GameInstance.start();
+                
+                // Game ready hone par loader fade out karein
+                setTimeout(() => {
+                    loader.style.opacity = '0';
                     setTimeout(() => {
-                        loader.style.opacity = '0';
-                        setTimeout(() => loader.style.display = 'none', 800);
-                    }, 1500);
-                })
-                .catch(err => {
-                    console.error("Critical Failure:", err);
-                    document.querySelector('.loading-text').innerText = "LOAD ERROR: CHECK CONSOLE";
-                });
+                        loader.style.display = 'none';
+                    }, 500);
+                }, 1000);
+
+            } catch(err) {
+                console.error("Critical Failure:", err);
+                document.querySelector('.loading-text').innerText = "LOAD ERROR: CHECK CONSOLE";
+            }
         });
     </script>
 </body>
